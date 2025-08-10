@@ -1,16 +1,24 @@
-
 <!doctype html>
-<html lang="es">
+<html lang="es" class="h-full">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Integrador de Riesgo CV</title>
     <meta name="description" content="Calculadora integradora de riesgo cardiovascular con ajuste por ateromatosis subclínica, factores psicosociales y antecedentes oncológicos." />
     <script>
+      // Tailwind CDN config
+      tailwind = window.tailwind || {};
       tailwind.config = { darkMode: 'class' };
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+      :root { --radius: 16px; }
+      .card { border-radius: var(--radius); }
+      @media (max-width: 480px) {
+        html { font-size: 17px; }
+        .btn { padding: 0.75rem 1rem; border-radius: 9999px; }
+        .stack > * { width: 100%; }
+      }
       @media print {
         body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .no-print { display: none !important; }
@@ -23,7 +31,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
-  <body class="bg-slate-50">
+  <body class="bg-slate-50 h-full">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -89,9 +97,21 @@
           } catch { return defaultState; }
         });
 
-        const [dark, setDark] = useState(() => { try { return JSON.parse(window.localStorage.getItem("cv_risk_ui_dark") || "false"); } catch { return false; } });
-        const [liveUpdate, setLiveUpdate] = useState(() => { try { return JSON.parse(window.localStorage.getItem("cv_risk_ui_live") || "false"); } catch { return false; } });
-        const [baseRiskInput, setBaseRiskInput] = useState(""); useEffect(() => { setBaseRiskInput(String(s.baseRisk)); }, []);
+        // Dark mode: persist + aplicar clase en <html>
+        const [dark, setDark] = useState(() => {
+          try {
+            const saved = window.localStorage.getItem("cv_risk_ui_dark");
+            if (saved === "true" || saved === "false") return JSON.parse(saved);
+          } catch {}
+          return false;
+        });
+        useEffect(() => {
+          try { window.localStorage.setItem("cv_risk_ui_dark", JSON.stringify(dark)); } catch {}
+          document.documentElement.classList.toggle("dark", !!dark);
+        }, [dark]);
+
+        const [baseRiskInput, setBaseRiskInput] = useState("");
+        useEffect(() => { setBaseRiskInput(String(s.baseRisk)); }, []);
         const [showAdvanced, setShowAdvanced] = useState(false);
         const [showBib, setShowBib] = useState(false);
         const [showAbout, setShowAbout] = useState(false);
@@ -102,24 +122,24 @@
         const [profiles, setProfiles] = useState(() => { try { const raw = window.localStorage.getItem("cv_risk_profiles_v2"); return raw ? JSON.parse(raw) : []; } catch { return []; } });
         const [profileName, setProfileName] = useState("");
 
+        // Guardar todo menos baseRisk
         useEffect(() => {
           try {
             const { baseRisk, ...rest } = s;
             window.localStorage?.setItem("cv_risk_integrator_state_v2", JSON.stringify(rest));
           } catch {}
         }, [s]);
-        useEffect(() => { try { window.localStorage.setItem("cv_risk_ui_dark", JSON.stringify(dark)); } catch {} }, [dark]);
-        useEffect(() => { try { window.localStorage.setItem("cv_risk_ui_live", JSON.stringify(liveUpdate)); } catch {} }, [liveUpdate]);
 
-        useEffect(() => {
-          if (!liveUpdate) return;
-          const normalized = String(baseRiskInput).replace(",", ".").trim();
-          const val = parseFloat(normalized);
-          if (Number.isFinite(val)) {
-            const num = clamp(val, 0, 60);
-            if (num !== s.baseRisk) setS({ ...s, baseRisk: num });
+        // LIVE UPDATE siempre: parsea a medida que tipeás
+        const onBaseRiskChange = (val) => {
+          setBaseRiskInput(val);
+          const normalized = String(val).replace(",", ".").trim();
+          const num = parseFloat(normalized);
+          if (Number.isFinite(num)) {
+            const clamped = clamp(num, 0, 60);
+            if (clamped !== s.baseRisk) setS({ ...s, baseRisk: clamped });
           }
-        }, [baseRiskInput, liveUpdate]);
+        };
 
         async function pastePercentFromClipboard() {
           try {
@@ -130,7 +150,7 @@
               const v = clamp(parseFloat(raw), 0, 60);
               if (Number.isFinite(v)) {
                 setBaseRiskInput(String(v));
-                if (!liveUpdate) setS({ ...s, baseRisk: v });
+                setS({ ...s, baseRisk: v });
               }
             }
           } catch {}
@@ -182,15 +202,8 @@
           return { label: "Alto", color: "bg-red-100 text-red-900" };
         }, [adjustedRisk]);
 
-        const commitBaseRisk = () => {
-          const normalized = String(baseRiskInput).replace(",", ".").trim();
-          const val = parseFloat(normalized);
-          const num = Number.isFinite(val) ? clamp(val, 0, 60) : s.baseRisk;
-          setS({ ...s, baseRisk: num });
-          setBaseRiskInput(String(num));
-        };
-
         const reset = () => { setS(defaultState); setBaseRiskInput(String(defaultState.baseRisk)); };
+
         function printPDF() { window.print(); }
 
         const presets = {
@@ -271,161 +284,152 @@
         }
 
         return (
-          <div className={dark ? "dark" : ""}>
-            <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-900 dark:text-slate-100 text-slate-900 p-6">
-              <div className="max-w-4xl mx-auto space-y-6">
-                <header className="flex items-center justify-between">
-                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Integrador de Riesgo CV</h1>
-                  <div className="flex flex-wrap gap-2 items-center no-print">
-                    <button onClick={() => setShowBib(true)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Bibliografía</button>
-                    <button onClick={() => setShowAbout(true)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Acerca / Metodología</button>
-                    <label className="flex items-center gap-2 text-sm px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 border">
-                      <input type="checkbox" checked={liveUpdate} onChange={(e) => setLiveUpdate(e.target.checked)} />
-                      Live update
-                    </label>
-                    <button onClick={() => setDark((v) => !v)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{dark ? "Claro" : "Oscuro"}</button>
-                    <button onClick={() => setShowAdvanced((v) => !v)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
-                    <button onClick={printPDF} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF (imprimir)</button>
-                    <button onClick={() => { const def = { ...defaultState }; const { baseRisk, ...rest } = def; localStorage.setItem("cv_risk_integrator_state_v2", JSON.stringify(rest)); location.reload(); }} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Reiniciar</button>
-                  </div>
-                </header>
-
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Ingresá el <span className="font-medium">riesgo base a 10 años</span> obtenido de un score validado (SCORE2, <abbr title="Pooled Cohort Equations (ACC/AHA)">PCE</abbr>, PREVENT, MESA, u <em>HEARTS/OPS</em>). Luego, aplicá ajustes por
-                  <span className="font-medium"> ateromatosis subclínica</span> (CAC y número de territorios con placa), <span className="font-medium">depresión/ansiedad</span> y <span className="font-medium">antecedentes oncológicos</span>.
-                  Esta herramienta es educativa y no reemplaza el juicio clínico ni las guías.
-                </p>
-
-                <div className="grid md:grid-cols-2 gap-6">
-                  <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
-                    <h2 className="text-lg font-semibold">1) Riesgo base</h2>
-
-                    <label className="block text-sm">Fuente</label>
-                    <div className="flex flex-wrap gap-2 items-center">
-                      <select
-                        className="border rounded-xl px-3 py-2 dark:bg-slate-900"
-                        value={s.baseSource}
-                        onChange={(e) => setS({ ...s, baseSource: e.target.value })}
-                      >
-                        {SOURCE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
-
-                      {s.baseSource.startsWith("HEARTS") && (
-                        <>
-                          <a className="px-3 py-2 rounded-2xl border" href="https://www.paho.org/cardioapp/web/#/cvrisk" target="_blank" rel="noreferrer noopener">Abrir HEARTS</a>
-                          <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar % (portapapeles)</button>
-                        </>
-                      )}
-
-                      {s.baseSource.startsWith("PREVENT") && (
-                        <>
-                          <a className="px-3 py-2 rounded-2xl border" href="https://professional.heart.org/en/guidelines-and-statements/prevent-risk-calculator/prevent-calculator" target="_blank" rel="noreferrer noopener">Abrir PREVENT</a>
-                          <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar % (portapapeles)</button>
-                          <span className="text-xs text-slate-500 dark:text-slate-400">Usá el <strong>10 años</strong> (no el de 30 años).</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
-                      PCE = Pooled Cohort Equations (ACC/AHA); PREVENT = nuevas ecuaciones AHA 2023–2024. Pegá el % que te dé la fuente elegida.
-                    </div>
-
-                    <label className="block text-sm mt-2">Riesgo a 10 años (%)</label>
-                    <input
-                      type="text" inputMode="decimal" placeholder="Ej.: 7.5"
-                      className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
-                      value={baseRiskInput}
-                      onChange={(e) => setBaseRiskInput(e.target.value)}
-                      onBlur={() => !liveUpdate && commitBaseRisk()}
-                      onKeyDown={(e) => { if (!liveUpdate && e.key === "Enter") e.currentTarget.blur(); }}
-                    />
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Podés tipear con <span className="font-medium">coma o punto</span>. {liveUpdate ? "Se aplica en tiempo real" : "Enter o salir del campo para aplicar"} (0–60%).</div>
-                  </section>
-
-                  <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
-                    <h2 className="text-lg font-semibold">2) Ateromatosis subclínica</h2>
-                    <div className="grid gap-3">
-                      <div>
-                        <label className="block text-sm">CAC (categoría)</label>
-                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.cac} onChange={(e) => setS({ ...s, cac: normalizeCAC(e.target.value) })}>
-                          <option value="unknown">Desconocido</option>
-                          <option value="0">0</option>
-                          <option value="1_99">1–99</option>
-                          <option value="100_299">100–299</option>
-                          <option value="300_plus">≥300</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm">Territorios con placa (carótida, aorta abd., ilíacas, femorales)</label>
-                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.territories} onChange={(e) => setS({ ...s, territories: clamp(parseInt(e.target.value,10)||0,0,4) })}>
-                          <option value="0">0</option>
-                          <option value="1">1</option>
-                          <option value="2">2</option>
-                          <option value="3">3</option>
-                          <option value="4">4</option>
-                        </select>
-                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">El multiplicador de territorios es configurable en “Ajustes avanzados”.</div>
-                      </div>
-                    </div>
-                    <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador ateromatosis: <span className="font-semibold">CAC × Terr = {toNumber(cacMult,1).toFixed(2)} × {toNumber(terrMult,1).toFixed(2)} = × {toNumber(atheroMultiplier,1).toFixed(2)}</span></div>
-                  </section>
+          <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-900 dark:text-slate-100 text-slate-900 p-4 md:p-6">
+            <div className="max-w-4xl mx-auto space-y-6">
+              <header className="flex items-center justify-between">
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Integrador de Riesgo CV</h1>
+                <div className="flex flex-wrap gap-2 items-center no-print stack">
+                  <button onClick={() => setShowBib(true)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Bibliografía</button>
+                  <button onClick={() => setShowAbout(true)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Acerca / Metodología</button>
+                  <button title="Editar multiplicadores (CAC, territorios, psicosocial, onco)" onClick={() => setShowAdvanced((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
+                  <button onClick={() => setDark((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{dark ? "Claro" : "Oscuro"}</button>
+                  <button onClick={printPDF} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF (imprimir)</button>
+                  <button onClick={() => { const def = { ...defaultState }; const { baseRisk, ...rest } = def; localStorage.setItem("cv_risk_integrator_state_v2", JSON.stringify(rest)); location.reload(); }} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Reiniciar</button>
                 </div>
+              </header>
 
-                <div className="grid md:grid-cols-2 gap-6">
-                  <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
-                    <h2 className="text-lg font-semibold">3) Psicosocial</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm">Depresión</label>
-                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.depression} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, depression: e.target.value } })}>
-                          <option value="none">Ninguna</option>
-                          <option value="mild">Leve/estable</option>
-                          <option value="major">Mayor/activa</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm">Ansiedad</label>
-                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.anxiety} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, anxiety: e.target.value } })}>
-                          <option value="none">Ninguna</option>
-                          <option value="clinical">Clínica</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador psicosocial: <span className="font-semibold">× {toNumber(psychosocialMultiplier, 1).toFixed(2)}</span> <span className="text-xs">(limitado a ×1.6 por superposición)</span></div>
-                  </section>
+              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Ingresá el <span className="font-medium">riesgo base a 10 años</span> obtenido de un score validado (SCORE2, <abbr title="Pooled Cohort Equations (ACC/AHA)">PCE</abbr>, PREVENT, MESA, u <em>HEARTS/OPS</em>). Luego, aplicá ajustes por
+                <span className="font-medium"> ateromatosis subclínica</span> (CAC y número de territorios con placa), <span className="font-medium">depresión/ansiedad</span> y <span className="font-medium">antecedentes oncológicos</span>.
+                Esta herramienta es educativa y no reemplaza el juicio clínico ni las guías.
+              </p>
 
-                  <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
-                    <h2 className="text-lg font-semibold">4) Antecedentes oncológicos</h2>
-                    <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.oncology} onChange={(e) => setS({ ...s, oncology: e.target.value })}>
-                      <option value="none">Ninguno</option>
-                      <option value="cancer_noncardiotox">Cáncer previo (sin cardiotóxicos)</option>
-                      <option value="anthracycline_or_rt">Antraciclinas o RT mediastinal</option>
+              <div className="grid md:grid-cols-2 gap-6">
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">1) Riesgo base</h2>
+
+                  <label className="block text-sm">Fuente</label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <select
+                      className="border rounded-xl px-3 py-2 dark:bg-slate-900"
+                      value={s.baseSource}
+                      onChange={(e) => setS({ ...s, baseSource: e.target.value })}
+                    >
+                      {SOURCE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
-                    <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador onco: <span className="font-semibold">× {toNumber(oncologyMultiplier, 1).toFixed(2)}</span></div>
-                  </section>
-                </div>
 
-                <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border print-area">
-                  <h2 className="text-lg font-semibold mb-3">Resultado</h2>
-                  <div className="grid md:grid-cols-3 gap-4 items-stretch">
-                    <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
-                      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Riesgo base</div>
-                      <div className="text-3xl font-semibold">{pretty(adjustedRisk.base)}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">Fuente: {s.baseSource || "(—)"} | CAC: {s.cac.replace("_","-")} | Terr: {s.territories}</div>
-                    </div>
-                    <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
-                      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Multiplicador compuesto</div>
-                      <div className="text-3xl font-semibold">× {toNumber(compositeMultiplier, 1).toFixed(2)}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">Atero (CAC×Terr) × Psico × Onco</div>
-                    </div>
-                    <div className={`border rounded-2xl p-4 ${category.color}`}>
-                      <div className="text-xs uppercase tracking-wide">Riesgo ajustado</div>
-                      <div className="text-3xl font-semibold">{pretty(adjustedRisk.adj)}</div>
-                      <div className="text-xs">Categoría: {category.label}</div>
-                    </div>
+                    {s.baseSource.startsWith("HEARTS") && (
+                      <>
+                        <a className="px-3 py-2 rounded-2xl border" href="https://www.paho.org/cardioapp/web/#/cvrisk" target="_blank" rel="noreferrer noopener">Abrir HEARTS</a>
+                        <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar %</button>
+                      </>
+                    )}
+
+                    {s.baseSource.startsWith("PREVENT") && (
+                      <>
+                        <a className="px-3 py-2 rounded-2xl border" href="https://professional.heart.org/en/guidelines-and-statements/prevent-risk-calculator/prevent-calculator" target="_blank" rel="noreferrer noopener">Abrir PREVENT</a>
+                        <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar %</button>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Usá el <strong>10 años</strong>.</span>
+                      </>
+                    )}
                   </div>
+
+                  <label className="block text-sm mt-2">Riesgo a 10 años (%)</label>
+                  <input
+                    type="text" inputMode="decimal" placeholder="Ej.: 7.5"
+                    className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
+                    value={baseRiskInput}
+                    onChange={(e) => onBaseRiskChange(e.target.value)}
+                  />
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Podés tipear con <span className="font-medium">coma o punto</span>. Se aplica en tiempo real (0–60%).</div>
                 </section>
 
-                <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 space-y-4 border">
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">2) Ateromatosis subclínica</h2>
+                  <div className="grid gap-3">
+                    <div>
+                      <label className="block text-sm">CAC (categoría)</label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.cac} onChange={(e) => setS({ ...s, cac: normalizeCAC(e.target.value) })}>
+                        <option value="unknown">Desconocido</option>
+                        <option value="0">0</option>
+                        <option value="1_99">1–99</option>
+                        <option value="100_299">100–299</option>
+                        <option value="300_plus">≥300</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm">Territorios con placa (carótida, aorta abd., ilíacas, femorales)</label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.territories} onChange={(e) => setS({ ...s, territories: clamp(parseInt(e.target.value,10)||0,0,4) })}>
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                      </select>
+                      <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">El multiplicador de territorios es configurable en “Ajustes avanzados”.</div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador ateromatosis: <span className="font-semibold">CAC × Terr = {toNumber(cacMult,1).toFixed(2)} × {toNumber(terrMult,1).toFixed(2)} = × {toNumber(atheroMultiplier,1).toFixed(2)}</span></div>
+                </section>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6 mt-6">
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">3) Psicosocial</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm">Depresión</label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.depression} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, depression: e.target.value } })}>
+                        <option value="none">Ninguna</option>
+                        <option value="mild">Leve/estable</option>
+                        <option value="major">Mayor/activa</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm">Ansiedad</label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.anxiety} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, anxiety: e.target.value } })}>
+                        <option value="none">Ninguna</option>
+                        <option value="clinical">Clínica</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador psicosocial: <span className="font-semibold">× {toNumber(psychosocialMultiplier, 1).toFixed(2)}</span> <span className="text-xs">(limitado a ×1.6 por superposición)</span></div>
+                </section>
+
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">4) Antecedentes oncológicos</h2>
+                  <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.oncology} onChange={(e) => setS({ ...s, oncology: e.target.value })}>
+                    <option value="none">Ninguno</option>
+                    <option value="cancer_noncardiotox">Cáncer previo (sin cardiotóxicos)</option>
+                    <option value="anthracycline_or_rt">Antraciclinas o RT mediastinal</option>
+                  </select>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador onco: <span className="font-semibold">× {toNumber(oncologyMultiplier, 1).toFixed(2)}</span></div>
+                </section>
+              </div>
+
+              <section className="card bg-white dark:bg-slate-800 shadow p-5 border print-area mt-6">
+                <h2 className="text-lg font-semibold mb-3">Resultado</h2>
+                <div className="grid md:grid-cols-3 gap-4 items-stretch">
+                  <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Riesgo base</div>
+                    <div className="text-3xl font-semibold">{pretty(adjustedRisk.base)}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Fuente: {s.baseSource || "(—)"} | CAC: {s.cac.replace("_","-")} | Terr: {s.territories}</div>
+                  </div>
+                  <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Multiplicador compuesto</div>
+                    <div className="text-3xl font-semibold">× {toNumber(compositeMultiplier, 1).toFixed(2)}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Atero (CAC×Terr) × Psico × Onco</div>
+                  </div>
+                  <div className={`border rounded-2xl p-4 ${category.color}`}>
+                    <div className="text-xs uppercase tracking-wide">Riesgo ajustado</div>
+                    <div className="text-3xl font-semibold">{pretty(adjustedRisk.adj)}</div>
+                    <div className="text-xs">Categoría: {category.label}</div>
+                  </div>
+                </div>
+              </section>
+
+              {showAdvanced && (
+                <section className="card bg-white dark:bg-slate-800 shadow p-5 space-y-4 border mt-6">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <h2 className="text-lg font-semibold">Ajustes avanzados (editar multiplicadores)</h2>
                     <div className="flex items-center gap-2 text-sm no-print">
@@ -453,148 +457,138 @@
                       </div>
                     ))}
                   </div>
+                </section>
+              )}
 
-                  <div className="border rounded-2xl p-4">
-                    <div className="flex items-center gap-2 text-sm mb-2 no-print">
-                      <input className="border rounded-xl px-2 py-1 dark:bg-slate-900" placeholder="Nombre del perfil" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
-                      <button onClick={saveProfile} className="px-2 py-1 rounded-xl border">Guardar perfil</button>
-                    </div>
-                    {profiles.length > 0 && (
-                      <ul className="space-y-2">
-                        {profiles.map((p, idx) => (
-                          <li key={idx} className="flex items-center justify-between border rounded-2xl px-3 py-2">
-                            <div className="text-sm">{p.name}</div>
-                            <div className="flex gap-2 no-print">
-                              <button onClick={() => loadProfile(idx)} className="px-2 py-1 rounded-xl border">Cargar</button>
-                              <button onClick={() => deleteProfile(idx)} className="px-2 py-1 rounded-xl border">Borrar</button>
+              <section className="card bg-white dark:bg-slate-800 shadow p-5 border mt-6">
+                <div className="flex items-center justify-between no-print">
+                  <h2 className="text-lg font-semibold mb-2">Pruebas automáticas</h2>
+                  <div className="flex gap-2">
+                    <button onClick={runTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Ejecutar tests</button>
+                    <button onClick={runExtendedTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Validación extendida</button>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Verifica operaciones matemáticas (incluye CAC y territorios) y aisla los tests del estado actual.</p>
+                {Array.isArray(testResults) && (
+                  <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
+                    {testResults.map((t, i) => (
+                      <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
+                        <div className="font-medium">{t.name}</div>
+                        <div>Resultado: {t.got.toFixed(2)}% | Esperado: {t.expected.toFixed(2)}%</div>
+                        <div className="text-xs">{t.pass ? "OK" : "FALLÓ"}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {Array.isArray(extResults) && (
+                  <>
+                    <h3 className="text-sm font-semibold mt-6">Resultados de validación extendida</h3>
+                    <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
+                      {extResults.map((t, i) => (
+                        <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
+                          <div className="font-medium">{t.name}</div>
+                          <div>Resultado: {typeof t.got === 'number' && t.got?.toFixed ? t.got.toFixed(2) : String(t.got)}</div>
+                          <div className="text-xs">Esperado: {typeof t.expected === 'number' ? t.expected : String(t.expected)} — {t.pass ? "OK" : "FALLÓ"}</div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Pasaron {extResults.filter(t => t.pass).length}/{extResults.length}</div>
+                  </>
+                )}
+              </section>
+
+              <section className="card bg-white dark:bg-slate-800 shadow p-5 border mt-6">
+                <h2 className="text-lg font-semibold mb-2">Notas rápidas y referencias</h2>
+                <ul className="list-disc pl-6 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+                  <li>Ingresá el valor base de un score validado (SCORE2, PCE, PREVENT, MESA, HEARTS/OPS). Esta app aplica multiplicadores (CAC, territorios, psicosocial, onco).</li>
+                  <li>La evidencia apoya que <span className="font-medium">CAC alto</span> y <span className="font-medium">mayor carga/territorios de placa</span> incrementan riesgo (ver BioImage 2015; PESA y revisiones).</li>
+                  <li>Los multiplicadores por territorios son <span className="font-medium">heurísticos conservadores</span> derivados de gradientes de riesgo por carga de placa; podés afinarlos en “Ajustes avanzados”.</li>
+                </ul>
+              </section>
+
+              <footer className="text-xs text-slate-500 dark:text-slate-400 pt-2 pb-24 md:pb-2">
+                © {new Date().getFullYear()} – Uso educativo. No reemplaza guías clínicas ni juicio profesional.
+              </footer>
+
+              {/* Sticky toolbar (mobile) */}
+              <div className="fixed md:hidden bottom-3 inset-x-0 px-3 no-print">
+                <div className="mx-auto max-w-md rounded-2xl shadow-lg border bg-white dark:bg-slate-800 flex items-center justify-between p-2 gap-2">
+                  <button onClick={printPDF} className="px-3 py-2 rounded-xl border flex-1">PDF</button>
+                  <button title="Editar multiplicadores (CAC, territorios, psicosocial, onco)" onClick={() => setShowAdvanced((v) => !v)} className="px-3 py-2 rounded-xl border flex-1">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
+                  <button onClick={() => setDark((v) => !v)} className="px-3 py-2 rounded-xl border flex-1">{dark ? "Claro" : "Oscuro"}</button>
+                </div>
+              </div>
+
+              {/* Bibliografía */}
+              {showBib && (
+                <div className="fixed inset-0 z-50">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setShowBib(false)} />
+                  <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
+                    <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-lg font-semibold">Bibliografía utilizada</h3>
+                        <button onClick={() => setShowBib(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <input className="w-full border rounded-xl px-3 py-2 dark:bg-slate-800" placeholder="Filtrar por autor, título, etiqueta..." value={bibQuery} onChange={(e) => setBibQuery(e.target.value)} />
+                      </div>
+                      <ul className="mt-4 space-y-3">
+                        {BIBLIO.filter(b => {
+                          if (!bibQuery.trim()) return true;
+                          const q = bibQuery.toLowerCase();
+                          return (
+                            (b.title || "").toLowerCase().includes(q) ||
+                            (b.authors || "").toLowerCase().includes(q) ||
+                            (b.journal || "").toLowerCase().includes(q) ||
+                            (b.tags || []).join(" ").toLowerCase().includes(q)
+                          );
+                        }).map((b) => (
+                          <li key={b.key} className="border rounded-2xl p-3 dark:border-slate-700">
+                            <div className="text-sm leading-relaxed">
+                              <div className="font-medium">{b.title}</div>
+                              <div className="opacity-80">{b.authors} – <em>{b.journal}</em> ({b.year})</div>
+                              <div className="mt-1 text-xs opacity-90">{b.citation}</div>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2 items-center">
+                              {b.doi && (<a href={`https://doi.org/${b.doi}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">DOI</a>)}
+                              <a href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent((b.title || "") + " " + (b.journal || "") + " " + (b.year || ""))}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">PubMed</a>
+                              {b.url && (<a href={b.url} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">Fuente</a>)}
+                              <button onClick={async () => { try { await navigator.clipboard.writeText(b.citation); } catch {} }} className="px-2 py-1 rounded-xl border">Copiar cita</button>
+                              {Array.isArray(b.tags) && b.tags.map(t => (<span key={t} className="text-xs px-2 py-0.5 rounded-full border bg-slate-50 dark:bg-slate-800">{t}</span>))}
                             </div>
                           </li>
                         ))}
                       </ul>
-                    )}
-                  </div>
-                </section>
-
-                <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border">
-                  <div className="flex items-center justify-between no-print">
-                    <h2 className="text-lg font-semibold mb-2">Pruebas automáticas</h2>
-                    <button onClick={runTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Ejecutar tests</button>
-                    <button onClick={runExtendedTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Validación extendida</button>
-                  </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">Este bloque verifica operaciones matemáticas (incluye CAC y territorios) y aisla los tests del estado actual.</p>
-                  {Array.isArray(testResults) && (
-                    <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
-                      {testResults.map((t, i) => (
-                        <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
-                          <div className="font-medium">{t.name}</div>
-                          <div>Resultado: {t.got.toFixed(2)}% | Esperado: {t.expected.toFixed(2)}%</div>
-                          <div className="text-xs">{t.pass ? "OK" : "FALLÓ"}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {Array.isArray(extResults) && (
-                    <>
-                      <h3 className="text-sm font-semibold mt-6">Resultados de validación extendida</h3>
-                      <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
-                        {extResults.map((t, i) => (
-                          <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
-                            <div className="font-medium">{t.name}</div>
-                            <div>Resultado: {typeof t.got === 'number' && t.got?.toFixed ? t.got.toFixed(2) : String(t.got)}</div>
-                            <div className="text-xs">Esperado: {typeof t.expected === 'number' ? t.expected : String(t.expected)} — {t.pass ? "OK" : "FALLÓ"}</div>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Pasaron {extResults.filter(t => t.pass).length}/{extResults.length}</div>
-                    </>
-                  )}
-                </section>
-
-                <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border">
-                  <h2 className="text-lg font-semibold mb-2">Notas rápidas y referencias</h2>
-                  <ul className="list-disc pl-6 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                    <li>Ingresá el valor base de un score validado (SCORE2, PCE, PREVENT, MESA, HEARTS/OPS). Esta app aplica multiplicadores (CAC, territorios, psicosocial, onco).</li>
-                    <li>La evidencia apoya que <span className="font-medium">CAC alto</span> y <span className="font-medium">mayor carga/territorios de placa</span> incrementan riesgo (ver BioImage 2015; PESA y revisiones).</li>
-                    <li>Los multiplicadores por territorios son <span className="font-medium">heurísticos conservadores</span> derivados de gradientes de riesgo por carga de placa; podés afinarlos en “Ajustes avanzados”.</li>
-                  </ul>
-                </section>
-
-                <footer className="text-xs text-slate-500 dark:text-slate-400 pt-2">
-                  © {new Date().getFullYear()} – Uso educativo. No reemplaza guías clínicas ni juicio profesional.
-                </footer>
-
-                {/* Bibliografía */}
-                {showBib && (
-                  <div className="fixed inset-0 z-50">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setShowBib(false)} />
-                    <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
-                      <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="text-lg font-semibold">Bibliografía utilizada</h3>
-                          <button onClick={() => setShowBib(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
-                        </div>
-                        <div className="mt-3 flex items-center gap-2">
-                          <input className="w-full border rounded-xl px-3 py-2 dark:bg-slate-800" placeholder="Filtrar por autor, título, etiqueta..." value={bibQuery} onChange={(e) => setBibQuery(e.target.value)} />
-                        </div>
-                        <ul className="mt-4 space-y-3">
-                          {BIBLIO.filter(b => {
-                            if (!bibQuery.trim()) return true;
-                            const q = bibQuery.toLowerCase();
-                            return (
-                              (b.title || "").toLowerCase().includes(q) ||
-                              (b.authors || "").toLowerCase().includes(q) ||
-                              (b.journal || "").toLowerCase().includes(q) ||
-                              (b.tags || []).join(" ").toLowerCase().includes(q)
-                            );
-                          }).map((b) => (
-                            <li key={b.key} className="border rounded-2xl p-3 dark:border-slate-700">
-                              <div className="text-sm leading-relaxed">
-                                <div className="font-medium">{b.title}</div>
-                                <div className="opacity-80">{b.authors} – <em>{b.journal}</em> ({b.year})</div>
-                                <div className="mt-1 text-xs opacity-90">{b.citation}</div>
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-2 items-center">
-                                {b.doi && (<a href={`https://doi.org/${b.doi}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">DOI</a>)}
-                                <a href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent((b.title || "") + " " + (b.journal || "") + " " + (b.year || ""))}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">PubMed</a>
-                                {b.url && (<a href={b.url} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">Fuente</a>)}
-                                <button onClick={async () => { try { await navigator.clipboard.writeText(b.citation); } catch {} }} className="px-2 py-1 rounded-xl border">Copiar cita</button>
-                                {Array.isArray(b.tags) && b.tags.map(t => (<span key={t} className="text-xs px-2 py-0.5 rounded-full border bg-slate-50 dark:bg-slate-800">{t}</span>))}
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                        <div className="mt-4 text-xs text-slate-500 dark:text-slate-400">Incluye PREVENT (AHA 2023–2024) y enlaces a calculadora y paper.</div>
-                      </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Acerca / Metodología */}
-                {showAbout && (
-                  <div className="fixed inset-0 z-50">
-                    <div className="absolute inset-0 bg-black/40" onClick={() => setShowAbout(false)} />
-                    <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
-                      <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6 space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <h3 className="text-lg font-semibold">Acerca de esta calculadora</h3>
-                          <button onClick={() => setShowAbout(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
-                        </div>
-                        <p className="text-sm leading-relaxed">
-                          Esta herramienta integra un <strong>riesgo base</strong> (p.ej., SCORE2, PCE, PREVENT, HEARTS/OPS) con multiplicadores por <strong>ateromatosis subclínica</strong> (CAC y número de territorios con placa por eco/3D-VUS), <strong>factores psicosociales</strong> (depresión/ansiedad) y <strong>antecedentes oncológicos</strong>.
-                        </p>
-                        <ol className="list-decimal pl-5 text-sm leading-relaxed space-y-1">
-                          <li><strong>Selección de literatura:</strong> CAC y carga de placa periférica muestran asociación independiente con eventos y mejoran reclasificación (BioImage 2015); PESA caracteriza <em>multiterritorialidad</em>; PREVENT provee una alternativa moderna a PCE para riesgo global CVD.</li>
-                          <li><strong>Modelo multiplicativo:</strong> <code>R_aj = R_base × M(CAC) × M(Territorios) × M(Psico) × M(Onco)</code>. Multiplicadores por defecto conservadores y editables.</li>
-                          <li><strong>Territorios:</strong> 4 lechos (carótida, aorta abdominal, ilíacas, femorales). RR iniciales (1.00, 1.25, 1.45, 1.65, 1.85) como aproximación acorde al gradiente por carga (BioImage) y a la clasificación por territorios (PESA); requieren <em>validación local</em>.</li>
-                          <li><strong>Pruebas internas:</strong> tests automatizados (monotonicidad, orden CAC, territorios) para evitar regresiones.</li>
-                          <li><strong>Limitaciones:</strong> evidencia sobre conteo de territorios y eventos a 10 años aún emergente; este módulo es <em>hipótesis operativa</em> editable por el usuario.</li>
-                        </ol>
-                        <p className="text-sm leading-relaxed">Objetivo: facilitar una <strong>validación clínica</strong> comparando reclasificación vs. PCE/SCORE2/PREVENT/HEARTS, evaluando calibración, discriminación y NRI/IDI.</p>
+              {/* Acerca / Metodología */}
+              {showAbout && (
+                <div className="fixed inset-0 z-50">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setShowAbout(false)} />
+                  <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
+                    <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-lg font-semibold">Acerca de esta calculadora</h3>
+                        <button onClick={() => setShowAbout(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
                       </div>
+                      <p className="text-sm leading-relaxed">
+                        Esta herramienta integra un <strong>riesgo base</strong> (p.ej., SCORE2, PCE, PREVENT, HEARTS/OPS) con multiplicadores por <strong>ateromatosis subclínica</strong> (CAC y número de territorios con placa por eco/3D-VUS), <strong>factores psicosociales</strong> (depresión/ansiedad) y <strong>antecedentes oncológicos</strong>.
+                      </p>
+                      <ol className="list-decimal pl-5 text-sm leading-relaxed space-y-1">
+                        <li><strong>Selección de literatura:</strong> CAC y carga de placa periférica muestran asociación independiente con eventos y mejoran reclasificación (BioImage 2015); PESA caracteriza <em>multiterritorialidad</em>; PREVENT provee una alternativa moderna a PCE para riesgo global CVD.</li>
+                        <li><strong>Modelo multiplicativo:</strong> <code>R_aj = R_base × M(CAC) × M(Territorios) × M(Psico) × M(Onco)</code>. Multiplicadores por defecto conservadores y editables.</li>
+                        <li><strong>Territorios:</strong> 4 lechos (carótida, aorta abdominal, ilíacas, femorales). RR iniciales (1.00, 1.25, 1.45, 1.65, 1.85) como aproximación acorde al gradiente por carga (BioImage) y a la clasificación por territorios (PESA); requieren <em>validación local</em>.</li>
+                        <li><strong>Pruebas internas:</strong> tests automatizados (monotonicidad, orden CAC, territorios) para evitar regresiones.</li>
+                        <li><strong>Limitaciones:</strong> evidencia sobre conteo de territorios y eventos a 10 años aún emergente; este módulo es <em>hipótesis operativa</em> editable por el usuario.</li>
+                      </ol>
+                      <p className="text-sm leading-relaxed">Objetivo: facilitar una <strong>validación clínica</strong> comparando reclasificación vs. PCE/SCORE2/PREVENT/HEARTS, evaluando calibración, discriminación y NRI/IDI.</p>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         );
