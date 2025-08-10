@@ -6,16 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Integrador de Riesgo CV</title>
     <meta name="description" content="Calculadora integradora de riesgo cardiovascular con ajuste por ateromatosis subclínica, factores psicosociales y antecedentes oncológicos." />
-    <!-- Tailwind Play CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- React 18 UMD + ReactDOM + Babel Standalone -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <style>
-      /* Soft scroll and fonts */
-      html { scroll-behavior: smooth; }
-    </style>
   </head>
   <body class="bg-slate-50">
     <div id="root"></div>
@@ -23,17 +17,13 @@
     <script type="text/babel">
       const { useMemo, useState, useEffect } = React;
 
-      // Helpers
       const clamp = (x, min, max) => Math.min(Math.max(x, min), max);
-
       const toNumber = (v, fallback = 0) => {
         const n = typeof v === "number" ? v : parseFloat(String(v));
         return Number.isFinite(n) ? n : fallback;
       };
-
       const pretty = (x) => `${toNumber(x, 0).toFixed(1)}%`;
 
-      // Normalizar valores de CAC para aceptar variantes (p. ej., "1-99" y "1_99")
       const normalizeCAC = (v) => {
         const s = String(v).trim();
         if (s === "0") return "0";
@@ -44,81 +34,48 @@
       };
 
       const defaultState = {
-        baseRisk: 7.5, // número garantizado
+        baseRisk: 7.5,
         baseSource: "SCORE2 / PCE / MESA",
-        atheroMode: "none", // none | cac | carotid
-        cac: "unknown", // unknown | 0 | 1_99 | 100_299 | 300_plus (UI puede mostrar 1–99, 100–299, ≥300)
-        carotidPlaque: "unknown", // unknown | none | present
-        psychosocial: {
-          depression: "none", // none | mild | major
-          anxiety: "none", // none | clinical
-        },
-        oncology: "none", // none | cancer_noncardiotox | anthracycline_or_rt
-        // Multiplicadores (RR aproximados, editables)
+        atheroMode: "none",
+        cac: "unknown",
+        carotidPlaque: "unknown",
+        psychosocial: { depression: "none", anxiety: "none" },
+        oncology: "none",
         multipliers: {
-          // Subclínica
-          cac_unknown: 1.0,
-          cac_0: 0.70, // "warranty" CAC=0
-          cac_1_99: 1.5,
-          cac_100_299: 2.2,
-          cac_300_plus: 3.0,
-          carotid_none: 1.0,
-          carotid_present: 1.4,
-          // Psicosocial
-          dep_none: 1.0,
-          dep_mild: 1.15,
-          dep_major: 1.30,
-          anx_none: 1.0,
-          anx_clinical: 1.20,
-          // Onco
-          onco_none: 1.0,
-          onco_noncardio: 1.15,
-          onco_cardio: 1.40,
+          cac_unknown: 1.0, cac_0: 0.70, cac_1_99: 1.5, cac_100_299: 2.2, cac_300_plus: 3.0,
+          carotid_none: 1.0, carotid_present: 1.4,
+          dep_none: 1.0, dep_mild: 1.15, dep_major: 1.30,
+          anx_none: 1.0, anx_clinical: 1.20,
+          onco_none: 1.0, onco_noncardio: 1.15, onco_cardio: 1.40,
         },
       };
 
       function App() {
         const [s, setS] = useState(() => {
           try {
-            if (typeof window === "undefined" || !window.localStorage) return defaultState;
-            const raw = window.localStorage.getItem("cv_risk_integrator_state_v1");
+            const raw = window.localStorage?.getItem("cv_risk_integrator_state_v1");
             const parsed = raw ? JSON.parse(raw) : {};
             const safe = { ...defaultState, ...parsed };
-            // Asegurar tipos numéricos
             safe.baseRisk = Number(safe.baseRisk) || defaultState.baseRisk;
             const mm = { ...defaultState.multipliers, ...(safe.multipliers || {}) };
             for (const k of Object.keys(mm)) mm[k] = Number(mm[k]) || defaultState.multipliers[k];
             safe.multipliers = mm;
-            // Normalizar CAC si quedó en formato alternativo
             safe.cac = normalizeCAC(safe.cac);
             return safe;
-          } catch {
-            return defaultState;
-          }
+          } catch { return defaultState; }
         });
 
-        // Entrada de teclado para riesgo base (string)
         const [baseRiskInput, setBaseRiskInput] = useState("");
-        useEffect(() => {
-          // Inicializar una vez con el valor actual
-          setBaseRiskInput(String(s.baseRisk));
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, []);
-
+        useEffect(() => { setBaseRiskInput(String(s.baseRisk)); }, []);
         const [showAdvanced, setShowAdvanced] = useState(false);
         const [testResults, setTestResults] = useState(null);
-        const [liveUpdate, setLiveUpdate] = useState(false); // switch: actualizar mientras tipeás
-        const [dark, setDark] = useState(false); // modo oscuro
+        const [liveUpdate, setLiveUpdate] = useState(false);
+        const [dark, setDark] = useState(false);
 
         useEffect(() => {
-          try {
-            if (typeof window !== "undefined" && window.localStorage) {
-              window.localStorage.setItem("cv_risk_integrator_state_v1", JSON.stringify(s));
-            }
-          } catch {}
+          try { window.localStorage?.setItem("cv_risk_integrator_state_v1", JSON.stringify(s)); } catch {}
         }, [s]);
 
-        // Live update: cuando está activo, aplicar cambios mientras se tipea
         useEffect(() => {
           if (!liveUpdate) return;
           const normalized = String(baseRiskInput).replace(",", ".").trim();
@@ -141,9 +98,7 @@
               default: return m.cac_unknown;
             }
           }
-          if (s.atheroMode === "carotid") {
-            return s.carotidPlaque === "present" ? m.carotid_present : m.carotid_none;
-          }
+          if (s.atheroMode === "carotid") return s.carotidPlaque === "present" ? m.carotid_present : m.carotid_none;
           return 1.0;
         }, [s]);
 
@@ -188,24 +143,14 @@
           setBaseRiskInput(String(num));
         };
 
-        const reset = () => {
-          setS(defaultState);
-          setBaseRiskInput(String(defaultState.baseRisk));
-        };
-
-        // Export PNG (simple: usar HTML2Canvas via import dinámico)
         async function exportPNG() {
           const { default: html2canvas } = await import("https://cdn.skypack.dev/html2canvas@1.4.1");
           const el = document.getElementById("export-card");
           const canvas = await html2canvas(el);
           const url = canvas.toDataURL("image/png");
           const a = document.createElement("a");
-          a.href = url;
-          a.download = "riesgo-ajustado.png";
-          a.click();
+          a.href = url; a.download = "riesgo-ajustado.png"; a.click();
         }
-
-        // Export PDF (via jsPDF)
         async function exportPDF() {
           const [{ jsPDF }, { default: html2canvas }] = await Promise.all([
             import("https://cdn.skypack.dev/jspdf@2.5.1"),
@@ -224,137 +169,16 @@
           pdf.save("riesgo-ajustado.pdf");
         }
 
-        // Presets de RR (con etiquetas y breves citas)
         const presets = {
-          conservador: {
-            label: "Conservador",
-            note: "RR moderados, prudentes.",
-            vals: {
-              cac_1_99: 1.4, cac_100_299: 2.0, cac_300_plus: 2.7,
-              dep_mild: 1.10, dep_major: 1.25, anx_clinical: 1.15,
-              onco_noncardio: 1.10, onco_cardio: 1.30,
-            },
-            cite: "Basado en síntesis observacional prudente (NEJM 2008; EHJ 2021).",
-          },
-          base: {
-            label: "Base (actual)",
-            note: "Valores por defecto del prototipo.",
-            vals: {},
-            cite: "Detrano 2008; SCORE2 2021; BMJ 2017; Lancet 2004; EHJ 2022.",
-          },
-          intensivo: {
-            label: "Intensivo",
-            note: "RR algo mayores para enfatizar reclasificación.",
-            vals: {
-              cac_1_99: 1.6, cac_100_299: 2.5, cac_300_plus: 3.5,
-              dep_mild: 1.20, dep_major: 1.40, anx_clinical: 1.25,
-              onco_noncardio: 1.20, onco_cardio: 1.55,
-            },
-            cite: "Para escenarios de alto riesgo subestimado (experto).",
-          },
+          conservador: { label: "Conservador", vals: { cac_1_99: 1.4, cac_100_299: 2.0, cac_300_plus: 2.7, dep_mild: 1.10, dep_major: 1.25, anx_clinical: 1.15, onco_noncardio: 1.10, onco_cardio: 1.30 } },
+          base: { label: "Base (actual)", vals: {} },
+          intensivo: { label: "Intensivo", vals: { cac_1_99: 1.6, cac_100_299: 2.5, cac_300_plus: 3.5, dep_mild: 1.20, dep_major: 1.40, anx_clinical: 1.25, onco_noncardio: 1.20, onco_cardio: 1.55 } },
         };
-
         function applyPreset(key) {
-          const p = presets[key];
-          if (!p) return;
-          setS((old) => ({
-            ...old,
-            multipliers: { ...old.multipliers, ...p.vals },
-          }));
+          const p = presets[key]; if (!p) return;
+          setS((old) => ({ ...old, multipliers: { ...old.multipliers, ...p.vals } }));
         }
 
-        // Simple perfiles de paciente guardados en localStorage
-        const [profiles, setProfiles] = useState(() => {
-          try {
-            const raw = localStorage.getItem("cv_risk_profiles_v1");
-            return raw ? JSON.parse(raw) : [];
-          } catch { return []; }
-        });
-        const [profileName, setProfileName] = useState("");
-
-        function saveProfile() {
-          const entry = { name: profileName || `Paciente ${profiles.length + 1}`, state: s };
-          const next = [entry, ...profiles].slice(0, 50);
-          setProfiles(next);
-          localStorage.setItem("cv_risk_profiles_v1", JSON.stringify(next));
-          setProfileName("");
-        }
-        function loadProfile(idx) {
-          const p = profiles[idx];
-          if (!p) return;
-          setS(p.state);
-          setBaseRiskInput(String(p.state.baseRisk));
-        }
-        function deleteProfile(idx) {
-          const next = profiles.filter((_, i) => i !== idx);
-          setProfiles(next);
-          localStorage.setItem("cv_risk_profiles_v1", JSON.stringify(next));
-        }
-
-        // --- Test harness (idéntico al de la versión canvas) ---
-        function calcWith(overrides) {
-          const st = { ...s, ...overrides };
-          const m = st.multipliers;
-          let athero = 1.0;
-          if (st.atheroMode === "cac") {
-            const key = normalizeCAC(st.cac);
-            const map = {
-              unknown: m.cac_unknown,
-              "0": m.cac_0,
-              "1_99": m.cac_1_99,
-              "100_299": m.cac_100_299,
-              "300_plus": m.cac_300_plus,
-            };
-            athero = toNumber(map[key], 1.0);
-          } else if (st.atheroMode === "carotid") {
-            athero = st.carotidPlaque === "present" ? toNumber(m.carotid_present, 1.4) : toNumber(m.carotid_none, 1.0);
-          }
-          const dep = st.psychosocial.depression === "mild" ? m.dep_mild : st.psychosocial.depression === "major" ? m.dep_major : m.dep_none;
-          const anx = st.psychosocial.anxiety === "clinical" ? m.anx_clinical : m.anx_none;
-          const psych = clamp(toNumber(dep, 1.0) * toNumber(anx, 1.0), 1.0, 1.6);
-          const onco = st.oncology === "cancer_noncardiotox" ? m.onco_noncardio : st.oncology === "anthracycline_or_rt" ? m.onco_cardio : m.onco_none;
-          const comp = toNumber(athero, 1.0) * toNumber(psych, 1.0) * toNumber(onco, 1.0);
-          const base = clamp(Number(st.baseRisk) || 0, 0, 60);
-          const adj = clamp(base * comp, 0, 95);
-          return { base, comp, adj };
-        }
-
-        function runTests() {
-          const baseCases = [
-            { name: "Sin modificadores", cfg: { baseRisk: 10, atheroMode: "none", psychosocial: { depression: "none", anxiety: "none" }, oncology: "none" }, expectAdj: 10.0 },
-            { name: "CAC=0 reduce riesgo", cfg: { baseRisk: 10, atheroMode: "cac", cac: "0" }, expectAdj: 7.0 },
-            { name: "CAC 100–299 eleva riesgo", cfg: { baseRisk: 10, atheroMode: "cac", cac: "100_299" }, expectAdj: 22.0 },
-            { name: "Psicosocial mayor + ansiedad clínica", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" } }, expectAdj: 15.6 },
-            { name: "Onco cardiotóxicos", cfg: { baseRisk: 10, oncology: "anthracycline_or_rt" }, expectAdj: 14.0 },
-            { name: "Combinado fuerte", cfg: { baseRisk: 8, atheroMode: "cac", cac: "300_plus", psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt" }, expectAdj: 43.7 },
-          ];
-
-          const extraCases = [
-            { name: "Carótida con placa presente", cfg: { baseRisk: 10, atheroMode: "carotid", carotidPlaque: "present" }, expectAdj: 14.0 },
-            { name: "Onco no cardiotóxicos", cfg: { baseRisk: 10, oncology: "cancer_noncardiotox" }, expectAdj: 11.5 },
-            { name: "CAC desconocido (sin efecto)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "unknown" }, expectAdj: 10.0 },
-            { name: "baseRisk como string", cfg: { baseRisk: "10", atheroMode: "cac", cac: "0" }, expectAdj: 7.0 },
-            { name: "CAC 1-99 (guion)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "1-99" }, expectAdj: 15.0 },
-            { name: "CAC 300+ (plus)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "300+" }, expectAdj: 30.0 },
-            { name: "Carótida unknown (sin efecto)", cfg: { baseRisk: 10, atheroMode: "carotid", carotidPlaque: "unknown" }, expectAdj: 10.0 },
-            { name: "baseRisk vacío => 0", cfg: { baseRisk: "", atheroMode: "cac", cac: "300_plus" }, expectAdj: 0.0 },
-            { name: "Clamp psicosocial a 1.6", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" }, multipliers: { dep_major: 2.0, anx_clinical: 2.0 } }, expectAdj: 16.0 },
-          ];
-
-          const all = [...baseCases, ...extraCases];
-
-          const results = all.map((t) => {
-            const merged = { ...defaultState, ...t.cfg };
-            merged.multipliers = { ...defaultState.multipliers, ...(t.cfg.multipliers || {}) };
-            const r = calcWith(merged);
-            const pass = Math.abs(r.adj - t.expectAdj) < 0.11;
-            return { name: t.name, got: r.adj, expected: t.expectAdj, pass };
-          });
-
-          setTestResults(results);
-        }
-
-        // UI
         return (
           <div className={dark ? "dark" : ""}>
             <div className="min-h-screen w-full bg-slate-50 dark:bg-slate-900 dark:text-slate-100 text-slate-900 p-6">
@@ -364,64 +188,44 @@
                   <div className="flex gap-2">
                     <button onClick={() => setDark((v) => !v)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{dark ? "Claro" : "Oscuro"}</button>
                     <button onClick={() => setShowAdvanced((v) => !v)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
+                    <label className="flex items-center gap-2 text-sm px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 border">
+                      <input type="checkbox" checked={liveUpdate} onChange={(e) => setLiveUpdate(e.target.checked)} />
+                      Actualizar mientras tipeás
+                    </label>
+                    <button onClick={exportPNG} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PNG</button>
+                    <button onClick={exportPDF} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF</button>
                   </div>
                 </header>
-
-                <div className="flex flex-wrap gap-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" checked={liveUpdate} onChange={(e) => setLiveUpdate(e.target.checked)} />
-                    Actualizar mientras tipeás
-                  </label>
-                  <button onClick={reset} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Reiniciar</button>
-                  <button onClick={exportPNG} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Exportar PNG</button>
-                  <button onClick={exportPDF} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Exportar PDF</button>
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>Presets RR:</span>
-                    <button onClick={() => applyPreset("conservador")} className="px-2 py-1 rounded-xl border">Conservador</button>
-                    <button onClick={() => applyPreset("base")} className="px-2 py-1 rounded-xl border">Base</button>
-                    <button onClick={() => applyPreset("intensivo")} className="px-2 py-1 rounded-xl border">Intensivo</button>
-                  </div>
-                </div>
 
                 <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border" id="export-card">
                   <h2 className="text-lg font-semibold">1) Riesgo base</h2>
                   <label className="block text-sm">Fuente del riesgo (opcional)</label>
-                  <input
-                    className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
-                    value={s.baseSource}
-                    onChange={(e) => setS({ ...s, baseSource: e.target.value })}
-                  />
+                  <input className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.baseSource} onChange={(e) => setS({ ...s, baseSource: e.target.value })} />
                   <label className="block text-sm">Riesgo a 10 años (%)</label>
                   <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="Ej.: 7.5"
+                    type="text" inputMode="decimal" placeholder="Ej.: 7.5"
                     className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
                     value={baseRiskInput}
                     onChange={(e) => setBaseRiskInput(e.target.value)}
                     onBlur={() => !liveUpdate && (commitBaseRisk())}
                     onKeyDown={(e) => { if (!liveUpdate && e.key === "Enter") e.currentTarget.blur(); }}
                   />
-                  <div className="text-xs text-slate-500 dark:text-slate-400">Podés tipear con <span className="font-medium">coma o punto</span>. {liveUpdate ? "Se aplica en tiempo real" : "Enter o salir del campo para aplicar"} (0–60%).</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">Podés tipear con coma o punto. {liveUpdate ? "Se aplica en tiempo real" : "Enter o salir del campo para aplicar"} (0–60%).</div>
                 </section>
 
                 <div className="grid md:grid-cols-2 gap-6">
                   <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
                     <h2 className="text-lg font-semibold">2) Ateromatosis subclínica</h2>
                     <div className="flex gap-3">
-                      <button onClick={() => setS({ ...s, atheroMode: "none" })} className={\`px-3 py-1 rounded-xl border \${s.atheroMode === "none" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}\`}>Sin dato</button>
-                      <button onClick={() => setS({ ...s, atheroMode: "cac" })} className={\`px-3 py-1 rounded-xl border \${s.atheroMode === "cac" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}\`}>CAC</button>
-                      <button onClick={() => setS({ ...s, atheroMode: "carotid" })} className={\`px-3 py-1 rounded-xl border \${s.atheroMode === "carotid" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}\`}>Ecografía carotídea</button>
+                      <button onClick={() => setS({ ...s, atheroMode: "none" })} className={`px-3 py-1 rounded-xl border ${s.atheroMode === "none" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}`}>Sin dato</button>
+                      <button onClick={() => setS({ ...s, atheroMode: "cac" })} className={`px-3 py-1 rounded-xl border ${s.atheroMode === "cac" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}`}>CAC</button>
+                      <button onClick={() => setS({ ...s, atheroMode: "carotid" })} className={`px-3 py-1 rounded-xl border ${s.atheroMode === "carotid" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}`}>Ecografía carotídea</button>
                     </div>
 
                     {s.atheroMode === "cac" && (
                       <div className="space-y-2">
                         <label className="block text-sm">Categoría de CAC</label>
-                        <select
-                          className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
-                          value={s.cac}
-                          onChange={(e) => setS({ ...s, cac: normalizeCAC(e.target.value) })}
-                        >
+                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.cac} onChange={(e) => setS({ ...s, cac: normalizeCAC(e.target.value) })}>
                           <option value="unknown">Desconocido</option>
                           <option value="0">0</option>
                           <option value="1_99">1–99</option>
@@ -434,11 +238,7 @@
                     {s.atheroMode === "carotid" && (
                       <div className="space-y-2">
                         <label className="block text-sm">Placa carotídea</label>
-                        <select
-                          className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
-                          value={s.carotidPlaque}
-                          onChange={(e) => setS({ ...s, carotidPlaque: e.target.value })}
-                        >
+                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.carotidPlaque} onChange={(e) => setS({ ...s, carotidPlaque: e.target.value })}>
                           <option value="unknown">Desconocido</option>
                           <option value="none">Ausente</option>
                           <option value="present">Presente</option>
@@ -454,11 +254,7 @@
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm">Depresión</label>
-                        <select
-                          className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
-                          value={s.psychosocial.depression}
-                          onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, depression: e.target.value } })}
-                        >
+                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.depression} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, depression: e.target.value } })}>
                           <option value="none">Ninguna</option>
                           <option value="mild">Leve/estable</option>
                           <option value="major">Mayor/activa</option>
@@ -466,11 +262,7 @@
                       </div>
                       <div>
                         <label className="block text-sm">Ansiedad</label>
-                        <select
-                          className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
-                          value={s.psychosocial.anxiety}
-                          onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, anxiety: e.target.value } })}
-                        >
+                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.anxiety} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, anxiety: e.target.value } })}>
                           <option value="none">Ninguna</option>
                           <option value="clinical">Clínica</option>
                         </select>
@@ -493,7 +285,7 @@
                       <div className="text-3xl font-semibold">× {toNumber(compositeMultiplier, 1).toFixed(2)}</div>
                       <div className="text-xs text-slate-500 dark:text-slate-400">Atero × Psicosocial × Onco</div>
                     </div>
-                    <div className={\`border rounded-2xl p-4 \${category.color}\`}>
+                    <div className={`border rounded-2xl p-4 ${category.color}`}>
                       <div className="text-xs uppercase tracking-wide">Riesgo ajustado</div>
                       <div className="text-3xl font-semibold">{pretty(adjustedRisk.adj)}</div>
                       <div className="text-xs">Categoría: {category.label}</div>
@@ -505,8 +297,10 @@
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold mb-2">Ajustes avanzados (editar multiplicadores)</h2>
                     <div className="flex items-center gap-2 text-sm">
-                      <input className="border rounded-xl px-2 py-1 dark:bg-slate-900" placeholder="Nombre del perfil" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
-                      <button onClick={saveProfile} className="px-2 py-1 rounded-xl border">Guardar perfil</button>
+                      <span>Presets RR:</span>
+                      <button onClick={() => applyPreset("conservador")} className="px-2 py-1 rounded-xl border">Conservador</button>
+                      <button onClick={() => applyPreset("base")} className="px-2 py-1 rounded-xl border">Base</button>
+                      <button onClick={() => applyPreset("intensivo")} className="px-2 py-1 rounded-xl border">Intensivo</button>
                     </div>
                   </div>
                   <p className="text-sm text-slate-600 dark:text-slate-300">Personalizá los RR. Los cambios persisten localmente.</p>
@@ -515,8 +309,7 @@
                       <div key={key} className="flex items-center justify-between gap-2 border rounded-xl px-3 py-2">
                         <span className="font-mono text-xs">{key}</span>
                         <input
-                          type="number"
-                          step="0.01"
+                          type="number" step="0.01"
                           className="w-24 border rounded-lg px-2 py-1 dark:bg-slate-900"
                           value={toNumber(val, toNumber(defaultState.multipliers[key], 1))}
                           onChange={(e) => {
@@ -527,36 +320,68 @@
                       </div>
                     ))}
                   </div>
-
-                  {profiles.length > 0 && (
-                    <div className="mt-4">
-                      <h3 className="font-medium mb-2">Perfiles guardados</h3>
-                      <ul className="space-y-2">
-                        {profiles.map((p, idx) => (
-                          <li key={idx} className="flex items-center justify-between border rounded-xl px-3 py-2">
-                            <div className="text-sm">{p.name}</div>
-                            <div className="flex gap-2">
-                              <button onClick={() => loadProfile(idx)} className="px-2 py-1 rounded-xl border">Cargar</button>
-                              <button onClick={() => deleteProfile(idx)} className="px-2 py-1 rounded-xl border">Borrar</button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </section>
 
                 <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border">
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold mb-2">Pruebas automáticas</h2>
-                    <button onClick={runTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Ejecutar tests</button>
+                    <button onClick={() => {
+                      const baseCases = [
+                        { name: "Sin modificadores", cfg: { baseRisk: 10, atheroMode: "none", psychosocial: { depression: "none", anxiety: "none" }, oncology: "none" }, expectAdj: 10.0 },
+                        { name: "CAC=0 reduce riesgo", cfg: { baseRisk: 10, atheroMode: "cac", cac: "0" }, expectAdj: 7.0 },
+                        { name: "CAC 100–299 eleva riesgo", cfg: { baseRisk: 10, atheroMode: "cac", cac: "100_299" }, expectAdj: 22.0 },
+                        { name: "Psicosocial mayor + ansiedad clínica", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" } }, expectAdj: 15.6 },
+                        { name: "Onco cardiotóxicos", cfg: { baseRisk: 10, oncology: "anthracycline_or_rt" }, expectAdj: 14.0 },
+                        { name: "Combinado fuerte", cfg: { baseRisk: 8, atheroMode: "cac", cac: "300_plus", psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt" }, expectAdj: 43.7 },
+                      ];
+                      const extraCases = [
+                        { name: "Carótida con placa presente", cfg: { baseRisk: 10, atheroMode: "carotid", carotidPlaque: "present" }, expectAdj: 14.0 },
+                        { name: "Onco no cardiotóxicos", cfg: { baseRisk: 10, oncology: "cancer_noncardiotox" }, expectAdj: 11.5 },
+                        { name: "CAC desconocido (sin efecto)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "unknown" }, expectAdj: 10.0 },
+                        { name: "baseRisk como string", cfg: { baseRisk: "10", atheroMode: "cac", cac: "0" }, expectAdj: 7.0 },
+                        { name: "CAC 1-99 (guion)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "1-99" }, expectAdj: 15.0 },
+                        { name: "CAC 300+ (plus)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "300+" }, expectAdj: 30.0 },
+                        { name: "Carótida unknown (sin efecto)", cfg: { baseRisk: 10, atheroMode: "carotid", carotidPlaque: "unknown" }, expectAdj: 10.0 },
+                        { name: "baseRisk vacío => 0", cfg: { baseRisk: "", atheroMode: "cac", cac: "300_plus" }, expectAdj: 0.0 },
+                        { name: "Clamp psicosocial a 1.6", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" }, multipliers: { dep_major: 2.0, anx_clinical: 2.0 } }, expectAdj: 16.0 },
+                      ];
+                      const all = [...baseCases, ...extraCases];
+                      function calcWith(overrides) {
+                        const st = { ...s, ...overrides };
+                        const m = st.multipliers;
+                        let athero = 1.0;
+                        if (st.atheroMode === "cac") {
+                          const key = normalizeCAC(st.cac);
+                          const map = { unknown: m.cac_unknown, "0": m.cac_0, "1_99": m.cac_1_99, "100_299": m.cac_100_299, "300_plus": m.cac_300_plus };
+                          athero = toNumber(map[key], 1.0);
+                        } else if (st.atheroMode === "carotid") {
+                          athero = st.carotidPlaque === "present" ? toNumber(m.carotid_present, 1.4) : toNumber(m.carotid_none, 1.0);
+                        }
+                        const dep = st.psychosocial.depression === "mild" ? m.dep_mild : st.psychosocial.depression === "major" ? m.dep_major : m.dep_none;
+                        const anx = st.psychosocial.anxiety === "clinical" ? m.anx_clinical : m.anx_none;
+                        const psych = clamp(toNumber(dep, 1.0) * toNumber(anx, 1.0), 1.0, 1.6);
+                        const onco = st.oncology === "cancer_noncardiotox" ? m.onco_noncardio : st.oncology === "anthracycline_or_rt" ? m.onco_cardio : m.onco_none;
+                        const comp = toNumber(athero, 1.0) * toNumber(psych, 1.0) * toNumber(onco, 1.0);
+                        const base = clamp(Number(st.baseRisk) || 0, 0, 60);
+                        const adj = clamp(base * comp, 0, 95);
+                        return { base, comp, adj };
+                      }
+                      const results = all.map((t) => {
+                        const merged = { ...defaultState, ...t.cfg };
+                        merged.multipliers = { ...defaultState.multipliers, ...(t.cfg.multipliers || {}) };
+                        const r = calcWith(merged);
+                        const pass = Math.abs(r.adj - t.expectAdj) < 0.11;
+                        return { name: t.name, got: r.adj, expected: t.expectAdj, pass };
+                      });
+                      setTestResults(results);
+                    }} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Ejecutar tests</button>
                   </div>
                   {Array.isArray(testResults) && (
                     <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
                       {testResults.map((t, i) => (
-                        <li key={i} className={\`border rounded-xl px-3 py-2 \${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}\`}>
+                        <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
                           <div className="font-medium">{t.name}</div>
-                          <div>Resultado: {t.got.toFixed(2)}% &nbsp;|&nbsp; Esperado: {t.expected.toFixed(2)}%</div>
+                          <div>Resultado: {t.got.toFixed(2)}% | Esperado: {t.expected.toFixed(2)}%</div>
                           <div className="text-xs">{t.pass ? "OK" : "FALLÓ"}</div>
                         </li>
                       ))}
@@ -572,9 +397,6 @@
                     <li>Depresión y ansiedad clínicas se asocian con incremento de riesgo CV; los valores aquí son conservadores y ajustables.</li>
                     <li>Historia de cáncer con antraciclinas o radioterapia mediastinal eleva riesgo CV a largo plazo; considerar prevención intensiva.</li>
                   </ul>
-                  <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Ejemplos de fuentes: Detrano R. <em>NEJM</em> 2008; SCORE2 <em>EHJ</em> 2021; Hippisley-Cox J. <em>BMJ</em> 2017; Yusuf S. <em>Lancet</em> 2004; Lyon AR. <em>EHJ</em> 2022.
-                  </div>
                 </section>
 
                 <footer className="text-xs text-slate-500 dark:text-slate-400 pt-2">
@@ -585,9 +407,7 @@
           </div>
         );
       }
-
-      const root = ReactDOM.createRoot(document.getElementById("root"));
-      root.render(<App />);
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
     </script>
   </body>
 </html>
