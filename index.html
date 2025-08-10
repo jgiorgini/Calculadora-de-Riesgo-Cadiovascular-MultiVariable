@@ -23,7 +23,8 @@
       const categorizeLabel = (r) => (r < 5 ? "Bajo" : r < 10 ? "Límite" : r < 20 ? "Intermedio" : "Alto");
 
       const defaultState = {
-        baseRisk: 0, baseSource: "SCORE2 / PCE / MESA",
+        baseRisk: 0,
+        baseSource: "SCORE2 (ESC 2021)",
         atheroMode: "none", cac: "unknown", carotidPlaque: "unknown",
         psychosocial: { depression: "none", anxiety: "none" },
         oncology: "none",
@@ -35,6 +36,14 @@
           onco_none: 1.0, onco_noncardio: 1.15, onco_cardio: 1.40,
         },
       };
+
+      const SOURCE_OPTIONS = [
+        "SCORE2 (ESC 2021)",
+        "PCE (Pooled Cohort Equations, ACC/AHA)",
+        "MESA (CHD risk)",
+        "HEARTS / OPS (OMS 2019)",
+        "Otro…"
+      ];
 
       const BIBLIO = [
         { key: "detrano2008", title: "Coronary Calcium as a Predictor of Coronary Events in Four Racial or Ethnic Groups", authors: "Detrano R, et al.", journal: "N Engl J Med", year: 2008, url: "https://doi.org/10.1056/NEJMoa0706280", doi: "10.1056/NEJMoa0706280", tags: ["CAC","MESA","pronóstico"], citation: "Detrano R, Guerci AD, Carr JJ, et al. Coronary calcium as a predictor of coronary events in four racial or ethnic groups. N Engl J Med. 2008;358:1336-1345." },
@@ -53,7 +62,7 @@
             const raw = window.localStorage?.getItem("cv_risk_integrator_state_v1");
             const parsed = raw ? JSON.parse(raw) : {};
             const safe = { ...defaultState, ...parsed };
-            safe.baseRisk = toNumber(safe.baseRisk, defaultState.baseRisk);
+            safe.baseRisk = 0; // arranque en 0
             const mm = { ...defaultState.multipliers, ...(safe.multipliers || {}) };
             for (const k of Object.keys(mm)) mm[k] = toNumber(mm[k], defaultState.multipliers[k]);
             safe.multipliers = mm;
@@ -74,7 +83,13 @@
         const [profiles, setProfiles] = useState(() => { try { const raw = window.localStorage.getItem("cv_risk_profiles_v1"); return raw ? JSON.parse(raw) : []; } catch { return []; } });
         const [profileName, setProfileName] = useState("");
 
-        useEffect(() => { try { window.localStorage?.setItem("cv_risk_integrator_state_v1", JSON.stringify(s)); } catch {} }, [s]);
+        // guardar todo menos baseRisk
+        useEffect(() => {
+          try {
+            const { baseRisk, ...rest } = s;
+            window.localStorage?.setItem("cv_risk_integrator_state_v1", JSON.stringify(rest));
+          } catch {}
+        }, [s]);
         useEffect(() => { try { window.localStorage.setItem("cv_risk_ui_dark", JSON.stringify(dark)); } catch {} }, [dark]);
         useEffect(() => { try { window.localStorage.setItem("cv_risk_ui_live", JSON.stringify(liveUpdate)); } catch {} }, [liveUpdate]);
 
@@ -87,6 +102,21 @@
             if (num !== s.baseRisk) setS({ ...s, baseRisk: num });
           }
         }, [baseRiskInput, liveUpdate]);
+
+        async function pastePercentFromClipboard() {
+          try {
+            const text = await navigator.clipboard.readText();
+            const m = text.match(/(\d+[\.,]?\d*)\s*%?/);
+            if (m) {
+              const raw = m[1].replace(",", ".");
+              const v = clamp(parseFloat(raw), 0, 60);
+              if (Number.isFinite(v)) {
+                setBaseRiskInput(String(v));
+                if (!liveUpdate) setS({ ...s, baseRisk: v });
+              }
+            }
+          } catch {}
+        }
 
         const atheroMultiplier = useMemo(() => {
           const m = s.multipliers;
@@ -268,7 +298,7 @@
                 </header>
 
                 <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Ingresá el <span className="font-medium">riesgo base a 10 años</span> obtenido de un score validado (p. ej., SCORE2, PCE o MESA). Luego, aplicá ajustes por
+                  Ingresá el <span className="font-medium">riesgo base a 10 años</span> obtenido de un score validado (SCORE2, <abbr title="Pooled Cohort Equations (ACC/AHA)">PCE</abbr>, MESA, u <em>HEARTS/OPS</em>). Luego, aplicá ajustes por
                   <span className="font-medium"> ateromatosis subclínica</span>, <span className="font-medium">depresión/ansiedad</span> y <span className="font-medium">antecedentes oncológicos</span>.
                   Esta herramienta es educativa y no reemplaza el juicio clínico ni las guías.
                 </p>
@@ -276,9 +306,29 @@
                 <div className="grid md:grid-cols-2 gap-6">
                   <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border" id="export-card">
                     <h2 className="text-lg font-semibold">1) Riesgo base</h2>
-                    <label className="block text-sm">Fuente del riesgo (opcional)</label>
-                    <input className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.baseSource} onChange={(e) => setS({ ...s, baseSource: e.target.value })} />
-                    <label className="block text-sm">Riesgo a 10 años (%)</label>
+
+                    <label className="block text-sm">Fuente</label>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <select
+                        className="border rounded-xl px-3 py-2 dark:bg-slate-900"
+                        value={s.baseSource}
+                        onChange={(e) => setS({ ...s, baseSource: e.target.value })}
+                      >
+                        {SOURCE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+
+                      {s.baseSource.startsWith("HEARTS") && (
+                        <>
+                          <a className="px-3 py-2 rounded-2xl border" href="https://heartsapp.paho.org" target="_blank" rel="noreferrer noopener">Abrir HEARTS</a>
+                          <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar % (portapapeles)</button>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                      PCE = Pooled Cohort Equations (ACC/AHA). Pegá el % que te dé la fuente elegida.
+                    </div>
+
+                    <label className="block text-sm mt-2">Riesgo a 10 años (%)</label>
                     <input
                       type="text" inputMode="decimal" placeholder="Ej.: 7.5"
                       className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
@@ -464,7 +514,7 @@
                 <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border">
                   <h2 className="text-lg font-semibold mb-2">Notas rápidas y referencias</h2>
                   <ul className="list-disc pl-6 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                    <li>Ingresá el valor base de un score validado (SCORE2, PCE, MESA). Esta app sólo aplica multiplicadores.</li>
+                    <li>Ingresá el valor base de un score validado (SCORE2, PCE, MESA, HEARTS/OPS). Esta app sólo aplica multiplicadores.</li>
                     <li><span className="font-medium">CAC=0</span> suele asociarse a menor riesgo a corto/mediano plazo; categorías crecientes de CAC elevan el riesgo relativo.</li>
                     <li>Depresión y ansiedad clínicas se asocian con incremento de riesgo CV; los valores aquí son conservadores y ajustables.</li>
                     <li>Historia de cáncer con antraciclinas o radioterapia mediastinal eleva riesgo CV a largo plazo; considerar prevención intensiva.</li>
