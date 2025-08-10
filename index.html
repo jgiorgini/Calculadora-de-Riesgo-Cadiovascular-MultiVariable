@@ -317,14 +317,8 @@
                     Acerca
                   </button>
                   <button title="Editar multiplicadores (CAC, territorios, psicosocial, onco)" onClick={() => setShowAdvanced((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
-                  <button onClick={() => setDark((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-                    {dark ? "Claro" : "Oscuro"}
-                  </button>
-                  <button onClick={printPDF} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="2"/></svg>
-                    PDF
-                  </button>
+                  <button onClick={() => setDark((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{dark ? "Claro" : "Oscuro"}</button>
+                  <button onClick={printPDF} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF</button>
                 </div>
               </header>
 
@@ -367,4 +361,309 @@
                         type="text" inputMode="decimal" placeholder="Ej.: 7.5"
                         className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
                         value={baseRiskInput}
-                        onChange={(e) =>
+                        onChange={(e) => onBaseRiskChange(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm mt-2">Código postal (opcional)</label>
+                      <input
+                        type="text" placeholder="Ej.: C1142"
+                        className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
+                        value={s.postalCode}
+                        onChange={(e) => onPostalCodeChange(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">2) Ateromatosis subclínica</h2>
+                  <div className="grid gap-3">
+                    <div>
+                      <label className="block text-sm">
+                        CAC (categoría)
+                        <InfoIcon text="El score de calcio coronario (CAC) es un fuerte predictor de eventos cardiovasculares. Un CAC de 0 tiene un valor pronóstico protector. Un CAC elevado recalifica el riesgo al alza." bibKeys={["detrano2008"]} />
+                      </label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.cac} onChange={(e) => setS({ ...s, cac: normalizeCAC(e.target.value) })}>
+                        <option value="unknown">Desconocido</option>
+                        <option value="0">0</option>
+                        <option value="1_99">1–99</option>
+                        <option value="100_299">100–299</option>
+                        <option value="300_plus">≥300</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm">
+                        Territorios con placa
+                        <InfoIcon text="La presencia de placas ateroscleróticas en múltiples territorios vasculares (carótidas, aorta, femorales) indica mayor carga aterosclerótica y aumenta el riesgo cardiovascular. Basado en evidencia de estudios como PESA y BioImage." bibKeys={["pesa2015", "bioimage2015"]} />
+                      </label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.territories} onChange={(e) => setS({ ...s, territories: clamp(parseInt(e.target.value,10)||0,0,4) })}>
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador ateromatosis: <span className="font-semibold">× {toNumber(athero,1).toFixed(2)}</span> (CAC: ×{toNumber(cac,1).toFixed(2)}, Terr: ×{toNumber(terr,1).toFixed(2)})</div>
+                </section>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6 mt-6">
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">3) Psicosocial</h2>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm">Depresión</label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.depression} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, depression: e.target.value } })}>
+                        <option value="none">Ninguna</option>
+                        <option value="mild">Leve/estable</option>
+                        <option value="major">Mayor/activa</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm">Ansiedad</label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.psychosocial.anxiety} onChange={(e) => setS({ ...s, psychosocial: { ...s.psychosocial, anxiety: e.target.value } })}>
+                        <option value="none">Ninguna</option>
+                        <option value="clinical">Clínica</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador psicosocial: <span className="font-semibold">× {toNumber(psych, 1).toFixed(2)}</span></div>
+                </section>
+
+                <section className="card bg-white dark:bg-slate-800 shadow p-4 space-y-4 border">
+                  <h2 className="text-lg font-semibold">4) Antecedentes oncológicos</h2>
+                  <label className="block text-sm">
+                    Antecedente oncológico y tratamiento
+                    <InfoIcon text="Muchos tratamientos contra el cáncer, especialmente la quimioterapia con antraciclinas y la radioterapia en el tórax, tienen efectos cardiotóxicos que aumentan el riesgo cardiovascular a largo plazo." bibKeys={["esc_cardio_onco_2022"]} />
+                  </label>
+                  <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.oncology} onChange={(e) => setS({ ...s, oncology: e.target.value })}>
+                    <option value="none">Ninguno</option>
+                    <option value="cancer_noncardiotox">Cáncer previo (sin cardiotóxicos)</option>
+                    <option value="anthracycline_or_rt">Antraciclinas o RT mediastinal</option>
+                  </select>
+                  <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador onco: <span className="font-semibold">× {toNumber(onco, 1).toFixed(2)}</span></div>
+                </section>
+              </div>
+
+              <section className="card bg-white dark:bg-slate-800 shadow p-5 border print-area mt-6">
+                <h2 className="text-lg font-semibold mb-3">Resultado</h2>
+                <div className="grid md:grid-cols-3 gap-4 items-stretch">
+                  <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Riesgo base</div>
+                    <div className="text-3xl font-semibold">{pretty(base)}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Fuente: {s.baseSource || "(—)"} | Cat.: {baseCategory}</div>
+                  </div>
+                  <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
+                    <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Multiplicador compuesto</div>
+                    <div className="text-3xl font-semibold">× {toNumber(comp, 1).toFixed(2)}</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Atero × Psico × Onco × Social</div>
+                  </div>
+                  <div className={`border rounded-2xl p-4 ${category.color}`}>
+                    <div className="text-xs uppercase tracking-wide">Riesgo ajustado</div>
+                    <div className="text-3xl font-semibold">{pretty(adj)}</div>
+                    <div className="text-xs">Categoría: {category.label}</div>
+                  </div>
+                </div>
+                <div className="mt-4 text-sm text-center font-medium">
+                  {reclassification}
+                </div>
+              </section>
+
+              <section className="card bg-white dark:bg-slate-800 shadow p-5 border mt-6 no-print">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold mb-2">Pacientes guardados</h2>
+                  <button onClick={saveProfile} className="btn px-3 py-2 rounded-2xl shadow border flex-shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mr-1"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    Guardar paciente
+                  </button>
+                </div>
+                <div className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                  <input
+                    type="text" placeholder="Nombre del paciente (opcional)"
+                    className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveProfile(); }}
+                  />
+                  <div className="mt-2 text-xs">Los datos se guardan en tu navegador.</div>
+                </div>
+                {profiles.length > 0 && (
+                  <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+                    {profiles.map((p, i) => (
+                      <li key={i} className="flex items-center justify-between gap-2 border rounded-xl px-3 py-2 bg-slate-50 dark:bg-slate-900">
+                        <span className="truncate">{p.name}</span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => loadProfile(i)} className="px-2 py-1 rounded-lg border">Cargar</button>
+                          <button onClick={() => deleteProfile(i)} className="px-2 py-1 rounded-lg border text-red-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              {showAdvanced && (
+                <section className="card bg-white dark:bg-slate-800 shadow p-5 space-y-4 border mt-6">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <h2 className="text-lg font-semibold">Ajustes avanzados (editar multiplicadores)</h2>
+                    <div className="flex items-center gap-2 text-sm no-print">
+                      <span>Presets RR:</span>
+                      <button onClick={() => applyPreset("conservador")} className="px-2 py-1 rounded-xl border">Conservador</button>
+                      <button onClick={() => applyPreset("base")} className="px-2 py-1 rounded-xl border">Base</button>
+                      <button onClick={() => applyPreset("intensivo")} className="px-2 py-1 rounded-xl border">Intensivo</button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">Personalizá los RR (incluido el efecto por territorios). Los cambios persisten localmente.</p>
+
+                  <div className="grid md:grid-cols-3 gap-4 text-sm">
+                    {Object.entries(s.multipliers).map(([key, val]) => (
+                      <div key={key} className="flex items-center justify-between gap-2 border rounded-xl px-3 py-2">
+                        <span className="font-mono text-xs">{key}</span>
+                        <input
+                          type="number" step={0.01}
+                          className="w-24 border rounded-lg px-2 py-1 dark:bg-slate-900"
+                          value={toNumber(val, toNumber(defaultState.multipliers[key], 1))}
+                          onChange={(e) => {
+                            const num = toNumber(e.target.value, toNumber(defaultState.multipliers[key], 1));
+                            setS({ ...s, multipliers: { ...s.multipliers, [key]: num } });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              <section className="card bg-white dark:bg-slate-800 shadow p-5 border mt-6">
+                <div className="flex items-center justify-between no-print">
+                  <h2 className="text-lg font-semibold mb-2">Pruebas automáticas</h2>
+                  <div className="flex gap-2">
+                    <button onClick={runTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Ejecutar tests</button>
+                    <button onClick={runExtendedTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Validación extendida</button>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300">Verifica operaciones matemáticas y aisla los tests del estado actual.</p>
+                {Array.isArray(testResults) && (
+                  <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
+                    {testResults.map((t, i) => (
+                      <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
+                        <div className="font-medium">{t.name}</div>
+                        <div>Resultado: {t.got.toFixed(2)}% | Esperado: {t.expected.toFixed(2)}%</div>
+                        <div className="text-xs">{t.pass ? "OK" : "FALLÓ"}</div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {Array.isArray(extResults) && (
+                  <>
+                    <h3 className="text-sm font-semibold mt-6">Resultados de validación extendida</h3>
+                    <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
+                      {extResults.map((t, i) => (
+                        <li key={i} className={`border rounded-xl px-3 py-2 ${t.pass ? "bg-emerald-50 dark:bg-emerald-900/20" : "bg-red-50 dark:bg-red-900/20"}`}>
+                          <div className="font-medium">{t.name}</div>
+                          <div>Resultado: {typeof t.got === 'number' && t.got?.toFixed ? t.got.toFixed(2) : String(t.got)}</div>
+                          <div className="text-xs">Esperado: {typeof t.expected === 'number' ? t.expected : String(t.expected)} — {t.pass ? "OK" : "FALLÓ"}</div>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-xs text-slate-600 dark:text-slate-300 mt-2">Pasaron {extResults.filter(t => t.pass).length}/{extResults.length}</div>
+                  </>
+                )}
+              </section>
+
+              <footer className="text-xs text-slate-500 dark:text-slate-400 pt-2 pb-24 md:pb-2">
+                © {new Date().getFullYear()} – Uso educativo. No reemplaza guías clínicas ni juicio profesional.
+              </footer>
+
+              {/* Sticky toolbar (mobile) */}
+              <div className="fixed md:hidden bottom-3 inset-x-0 px-3 no-print">
+                <div className="mx-auto max-w-md rounded-2xl shadow-lg border bg-white dark:bg-slate-800 flex items-center justify-between p-2 gap-2">
+                  <button onClick={printPDF} className="px-3 py-2 rounded-xl border flex-1">PDF</button>
+                  <button onClick={() => setShowAbout(true)} className="px-3 py-2 rounded-xl border flex-1">Acerca</button>
+                  <button title="Editar multiplicadores" onClick={() => setShowAdvanced((v) => !v)} className="px-3 py-2 rounded-xl border flex-1">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
+                </div>
+              </div>
+
+              {/* Bibliografía */}
+              {showBib && (
+                <div className="fixed inset-0 z-50">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setShowBib(false)} />
+                  <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
+                    <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-lg font-semibold">Bibliografía utilizada</h3>
+                        <button onClick={() => setShowBib(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <input className="w-full border rounded-xl px-3 py-2 dark:bg-slate-800" placeholder="Filtrar por autor, título, etiqueta..." value={bibQuery} onChange={(e) => setBibQuery(e.target.value)} />
+                      </div>
+                      <ul className="mt-4 space-y-3">
+                        {BIBLIO.filter(b => {
+                          if (!bibQuery.trim()) return true;
+                          const q = bibQuery.toLowerCase();
+                          return (
+                            (b.title || "").toLowerCase().includes(q) ||
+                            (b.authors || "").toLowerCase().includes(q) ||
+                            (b.journal || "").toLowerCase().includes(q) ||
+                            (b.tags || []).join(" ").toLowerCase().includes(q)
+                          );
+                        }).map((b) => (
+                          <li key={b.key} className="border rounded-2xl p-3 dark:border-slate-700">
+                            <div className="text-sm leading-relaxed">
+                              <div className="font-medium">{b.title}</div>
+                              <div className="opacity-80">{b.authors} – <em>{b.journal}</em> ({b.year})</div>
+                              <div className="mt-1 text-xs opacity-90">{b.citation}</div>
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2 items-center">
+                              {b.doi && (<a href={`https://doi.org/${b.doi}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">DOI</a>)}
+                              <a href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent((b.title || "") + " " + (b.journal || "") + " " + (b.year || ""))}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">PubMed</a>
+                              {b.url && (<a href={b.url} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">Fuente</a>)}
+                              <button onClick={async () => { try { await navigator.clipboard.writeText(b.citation); } catch {} }} className="px-2 py-1 rounded-xl border">Copiar cita</button>
+                              {Array.isArray(b.tags) && b.tags.map(t => (<span key={t} className="text-xs px-2 py-0.5 rounded-full border bg-slate-50 dark:bg-slate-800">{t}</span>))}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Acerca / Metodología */}
+              {showAbout && (
+                <div className="fixed inset-0 z-50">
+                  <div className="absolute inset-0 bg-black/40" onClick={() => setShowAbout(false)} />
+                  <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
+                    <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-lg font-semibold">Acerca de esta calculadora</h3>
+                        <button onClick={() => setShowAbout(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
+                      </div>
+                      <p className="text-sm leading-relaxed">
+                        Esta herramienta integra un <strong>riesgo base</strong> (p.ej., SCORE2, PCE, PREVENT, HEARTS/OPS) con multiplicadores por <strong>ateromatosis subclínica</strong> (CAC y número de territorios con placa), <strong>factores psicosociales</strong> (depresión/ansiedad) y <strong>antecedentes oncológicos</strong>.
+                      </p>
+                      <ol className="list-decimal pl-5 text-sm leading-relaxed space-y-1">
+                        <li><strong>Modelo multiplicativo:</strong> <code>R_aj = R_base × M(CAC) × M(Territorios) × M(Psico) × M(Onco) × M(Social)</code>. Multiplicadores por defecto conservadores y editables.</li>
+                        <li><strong>Territorios:</strong> 4 lechos (carótida, aorta abdominal, ilíacas, femorales). Los multiplicadores son una aproximación basada en gradientes de riesgo y la clasificación por territorios (PESA), y pueden ser ajustados por el usuario en "Avanzado".</li>
+                        <li><strong>Contexto social:</strong> El código postal se usa como proxy de los determinantes sociales de la salud (acceso a servicios, calidad de vida). Este factor es experimental y busca contextualizar mejor el riesgo. Actualmente, solo se ajusta para códigos postales específicos de zonas con determinantes sociales más adversos (ej. C1142 - Villa 31 en Buenos Aires).</li>
+                        <li><strong>Validación:</strong> La aplicación incluye tests internos para garantizar que la lógica de cálculo se mantenga consistente. El objetivo final es ser una herramienta de validación clínica que ayude a comparar la reclasificación de riesgo.</li>
+                      </ol>
+                      <p className="text-sm leading-relaxed">Objetivo: Facilitar una <strong>validación clínica</strong> comparando la reclasificación vs. los scores tradicionales, evaluando calibración y discriminación.</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
