@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="es">
   <head>
@@ -5,7 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Integrador de Riesgo CV</title>
     <meta name="description" content="Calculadora integradora de riesgo cardiovascular con ajuste por ateromatosis subclínica, factores psicosociales y antecedentes oncológicos." />
+    <script>
+      tailwind.config = { darkMode: 'class' };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .no-print { display: none !important; }
+        .print-area, .print-area * { visibility: visible !important; }
+        body *:not(.print-area):not(.print-area *) { visibility: hidden !important; }
+        .print-area { position: absolute; inset: 0; padding: 24px; background: white; }
+      }
+    </style>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -25,11 +38,13 @@
       const defaultState = {
         baseRisk: 0,
         baseSource: "SCORE2 (ESC 2021)",
-        atheroMode: "none", cac: "unknown", carotidPlaque: "unknown",
+        cac: "unknown",
+        territories: 0, // 0..4
         psychosocial: { depression: "none", anxiety: "none" },
         oncology: "none",
         multipliers: {
           cac_unknown: 1.0, cac_0: 0.70, cac_1_99: 1.5, cac_100_299: 2.2, cac_300_plus: 3.0,
+          terr_0: 1.00, terr_1: 1.25, terr_2: 1.45, terr_3: 1.65, terr_4: 1.85,
           carotid_none: 1.0, carotid_present: 1.4,
           dep_none: 1.0, dep_mild: 1.15, dep_major: 1.30,
           anx_none: 1.0, anx_clinical: 1.20,
@@ -42,31 +57,34 @@
         "PCE (Pooled Cohort Equations, ACC/AHA)",
         "MESA (CHD risk)",
         "HEARTS / OPS (OMS 2019)",
+        "PREVENT (AHA 2023)",
         "Otro…"
       ];
 
       const BIBLIO = [
-        { key: "detrano2008", title: "Coronary Calcium as a Predictor of Coronary Events in Four Racial or Ethnic Groups", authors: "Detrano R, et al.", journal: "N Engl J Med", year: 2008, url: "https://doi.org/10.1056/NEJMoa0706280", doi: "10.1056/NEJMoa0706280", tags: ["CAC","MESA","pronóstico"], citation: "Detrano R, Guerci AD, Carr JJ, et al. Coronary calcium as a predictor of coronary events in four racial or ethnic groups. N Engl J Med. 2008;358:1336-1345." },
-        { key: "score22021", title: "SCORE2 risk prediction algorithms: new models for cardiovascular risk in Europe", authors: "Visseren FLJ, et al.", journal: "Eur Heart J", year: 2021, url: "https://academic.oup.com/eurheartj/article/42/25/2439/6297709", doi: "10.1093/eurheartj/ehab309", tags: ["SCORE2","algoritmo","riesgo"], citation: "Visseren FLJ, et al. SCORE2 risk prediction algorithms: new models for cardiovascular risk in Europe. Eur Heart J. 2021;42(25):2439-2454." },
-        { key: "qrisk32017", title: "Development and validation of QRISK3 risk prediction algorithms", authors: "Hippisley-Cox J, Coupland C.", journal: "BMJ", year: 2017, url: "https://doi.org/10.1136/bmj.j2099", doi: "10.1136/bmj.j2099", tags: ["psicosocial","predictores","algoritmo"], citation: "Hippisley-Cox J, Coupland C. Development and validation of QRISK3 risk prediction algorithms: prospective cohort study. BMJ. 2017;357:j2099." },
-        { key: "nicholson2006", title: "Depression as an aetiologic and prognostic factor in coronary heart disease: a meta-analysis", authors: "Nicholson A, et al.", journal: "Eur Heart J", year: 2006, url: "https://academic.oup.com/eurheartj/article/27/23/2763/2887435", doi: "10.1093/eurheartj/ehl338", tags: ["depresión","meta-análisis"], citation: "Nicholson A, Kuper H, Hemingway H. Depression as an aetiologic and prognostic factor in coronary heart disease: a meta-analysis of 63 studies. Eur Heart J. 2006;27:2763-2774." },
-        { key: "roest2010", title: "Anxiety and risk of incident coronary heart disease: a meta-analysis", authors: "Roest AM, et al.", journal: "J Am Coll Cardiol", year: 2010, url: "https://www.jacc.org/doi/10.1016/j.jacc.2010.03.034", doi: "10.1016/j.jacc.2010.03.034", tags: ["ansiedad","meta-análisis"], citation: "Roest AM, Martens EJ, de Jonge P, Denollet J. Anxiety and risk of incident coronary heart disease: a meta-analysis. J Am Coll Cardiol. 2010;56:38-46." },
-        { key: "interheart2004", title: "Effect of potentially modifiable risk factors associated with myocardial infarction in 52 countries (INTERHEART study)", authors: "Yusuf S, et al.", journal: "Lancet", year: 2004, url: "https://doi.org/10.1016/S0140-6736(04)17018-9", doi: "10.1016/S0140-6736(04)17018-9", tags: ["psicosocial","riesgo","global"], citation: "Yusuf S, Hawken S, Ounpuu S, et al. Effect of potentially modifiable risk factors associated with myocardial infarction in 52 countries (the INTERHEART study). Lancet. 2004;364:937-952." },
-        { key: "nambi2010", title: "Carotid intima-media thickness and presence or absence of plaque improves prediction of coronary heart disease risk", authors: "Nambi V, et al.", journal: "J Am Coll Cardiol", year: 2010, url: "https://www.jacc.org/doi/10.1016/j.jacc.2009.11.075", doi: "10.1016/j.jacc.2009.11.075", tags: ["carótida","placa","reclasificación"], citation: "Nambi V, Chambless L, Folsom AR, et al. Carotid intima-media thickness and presence or absence of plaque improves prediction of coronary heart disease risk. J Am Coll Cardiol. 2010;55:1600-1607." },
-        { key: "esc_cardio_onco_2022", title: "2022 ESC Guidelines on cardio-oncology", authors: "Lyon AR, et al.", journal: "Eur Heart J", year: 2022, url: "https://academic.oup.com/eurheartj/article/43/41/4229/6673995", doi: "10.1093/eurheartj/ehac244", tags: ["cardio-oncología","guías"], citation: "Lyon AR, Dent S, Stanway S, et al. 2022 ESC Guidelines on cardio-oncology. Eur Heart J. 2022;43(41):4229-4361." },
+        { key: "detrano2008", title: "Coronary Calcium as a Predictor of Coronary Events in Four Racial or Ethnic Groups", authors: "Detrano R, et al.", journal: "N Engl J Med", year: 2008, url: "https://doi.org/10.1056/NEJMoa0706280", doi: "10.1056/NEJMoa0706280", tags: ["CAC","MESA","pronóstico"], citation: "Detrano R, et al. N Engl J Med. 2008;358:1336-1345." },
+        { key: "bioimage2015", title: "Prevalence, Impact, and Predictive Value of Detecting SA by Carotid Plaque Burden and CAC (BioImage)", authors: "Baber U, et al.", journal: "J Am Coll Cardiol", year: 2015, url: "https://pubmed.ncbi.nlm.nih.gov/25790876/", doi: "", tags: ["cPB","CAC","reclasificación","eventos"], citation: "Baber U, et al. J Am Coll Cardiol. 2015;65:1065–1074." },
+        { key: "pesa2015", title: "Prevalence & Multiterritorial Extent of SA (PESA)", authors: "Fernández-Friera L, et al.", journal: "Circulation", year: 2015, url: "https://doi.org/10.1161/CIRCULATIONAHA.114.014310", doi: "10.1161/CIRCULATIONAHA.114.014310", tags: ["PESA","multiterritorial"], citation: "Fernández-Friera L, et al. Circulation. 2015;131:2104–2113." },
+        { key: "pesa3d2017", title: "Subclinical Atherosclerosis Burden by 3D Ultrasound in Mid-Life", authors: "López-Melgar B, et al.", journal: "J Am Coll Cardiol", year: 2017, url: "https://www.jacc.org/doi/10.1016/j.jacc.2017.05.033", doi: "10.1016/j.jacc.2017.05.033", tags: ["3D VUS","burden"], citation: "López-Melgar B, et al. J Am Coll Cardiol. 2017;70:301–313." },
+        { key: "mehta2021", title: "Association of Carotid Artery Plaque With Cardiovascular Events", authors: "Mehta A, et al.", journal: "Circ Cardiovasc Imaging", year: 2021, url: "https://www.ahajournals.org/doi/10.1161/CIRCIMAGING.120.011701", doi: "10.1161/CIRCIMAGING.120.011701", tags: ["carótida","eventos"], citation: "Mehta A, et al. Circ Cardiovasc Imaging. 2021;14:e011701." },
+        { key: "review2023", title: "Assessment of subclinical atherosclerosis in asymptomatic adults (Review)", authors: "Garg P, et al.", journal: "Atherosclerosis Thromb Vasc Biol", year: 2023, url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10753091/", doi: "", tags: ["revisión","subclínica","ultrasonido"], citation: "Garg P, et al. ATVB. 2023;43:1868–1887." },
+        { key: "esc_cardio_onco_2022", title: "2022 ESC Guidelines on cardio-oncology", authors: "Lyon AR, et al.", journal: "Eur Heart J", year: 2022, url: "https://academic.oup.com/eurheartj/article/43/41/4229/6673995", doi: "10.1093/eurheartj/ehac244", tags: ["cardio-oncología","guías"], citation: "Lyon AR, et al. Eur Heart J. 2022;43:4229–4361." },
+        { key: "prevent_calc", title: "PREVENT Online Calculator", authors: "American Heart Association", journal: "Professional Heart Daily", year: 2023, url: "https://professional.heart.org/en/guidelines-and-statements/prevent-risk-calculator/prevent-calculator", doi: "", tags: ["PREVENT","calculadora"], citation: "American Heart Association. PREVENT Online Calculator. 2023. Professional Heart Daily." },
+        { key: "prevent_paper", title: "Development and Validation of the AHA PREVENT Equations", authors: "Khan SS, Matsushita K, Sang Y, et al.", journal: "Circulation", year: 2024, url: "https://www.ahajournals.org/doi/10.1161/CIRCULATIONAHA.123.067626", doi: "10.1161/CIRCULATIONAHA.123.067626", tags: ["PREVENT","modelo"], citation: "Khan SS, Matsushita K, Sang Y, et al. Development and Validation of the AHA PREVENT Equations. Circulation. 2024;149(6):430-449." }
       ];
 
       function App() {
         const [s, setS] = useState(() => {
           try {
-            const raw = window.localStorage?.getItem("cv_risk_integrator_state_v1");
+            const raw = window.localStorage?.getItem("cv_risk_integrator_state_v2");
             const parsed = raw ? JSON.parse(raw) : {};
             const safe = { ...defaultState, ...parsed };
-            safe.baseRisk = 0; // arranque en 0
+            safe.baseRisk = 0;
             const mm = { ...defaultState.multipliers, ...(safe.multipliers || {}) };
             for (const k of Object.keys(mm)) mm[k] = toNumber(mm[k], defaultState.multipliers[k]);
             safe.multipliers = mm;
             safe.cac = normalizeCAC(safe.cac);
+            safe.territories = clamp(parseInt(safe.territories || 0, 10) || 0, 0, 4);
             return safe;
           } catch { return defaultState; }
         });
@@ -76,18 +94,18 @@
         const [baseRiskInput, setBaseRiskInput] = useState(""); useEffect(() => { setBaseRiskInput(String(s.baseRisk)); }, []);
         const [showAdvanced, setShowAdvanced] = useState(false);
         const [showBib, setShowBib] = useState(false);
+        const [showAbout, setShowAbout] = useState(false);
         const [bibQuery, setBibQuery] = useState("");
         const [testResults, setTestResults] = useState(null);
         const [extResults, setExtResults] = useState(null);
 
-        const [profiles, setProfiles] = useState(() => { try { const raw = window.localStorage.getItem("cv_risk_profiles_v1"); return raw ? JSON.parse(raw) : []; } catch { return []; } });
+        const [profiles, setProfiles] = useState(() => { try { const raw = window.localStorage.getItem("cv_risk_profiles_v2"); return raw ? JSON.parse(raw) : []; } catch { return []; } });
         const [profileName, setProfileName] = useState("");
 
-        // guardar todo menos baseRisk
         useEffect(() => {
           try {
             const { baseRisk, ...rest } = s;
-            window.localStorage?.setItem("cv_risk_integrator_state_v1", JSON.stringify(rest));
+            window.localStorage?.setItem("cv_risk_integrator_state_v2", JSON.stringify(rest));
           } catch {}
         }, [s]);
         useEffect(() => { try { window.localStorage.setItem("cv_risk_ui_dark", JSON.stringify(dark)); } catch {} }, [dark]);
@@ -118,23 +136,28 @@
           } catch {}
         }
 
-        const atheroMultiplier = useMemo(() => {
+        const cacMult = useMemo(() => {
           const m = s.multipliers;
-          if (s.atheroMode === "cac") {
-            const key = normalizeCAC(s.cac);
-            switch (key) { case "0": return m.cac_0; case "1_99": return m.cac_1_99; case "100_299": return m.cac_100_299; case "300_plus": return m.cac_300_plus; default: return m.cac_unknown; }
+          switch (normalizeCAC(s.cac)) {
+            case "0": return m.cac_0;
+            case "1_99": return m.cac_1_99;
+            case "100_299": return m.cac_100_299;
+            case "300_plus": return m.cac_300_plus;
+            default: return m.cac_unknown;
           }
-          if (s.atheroMode === "carotid") return s.carotidPlaque === "present" ? m.carotid_present : m.carotid_none;
-          return 1.0;
         }, [s]);
-
+        const terrMult = useMemo(() => {
+          const m = s.multipliers;
+          const t = clamp(parseInt(s.territories || 0, 10) || 0, 0, 4);
+          const key = `terr_${t}`;
+          return toNumber(m[key], 1.0);
+        }, [s]);
         const psychosocialMultiplier = useMemo(() => {
           const m = s.multipliers;
           const dep = s.psychosocial.depression === "mild" ? m.dep_mild : s.psychosocial.depression === "major" ? m.dep_major : m.dep_none;
           const anx = s.psychosocial.anxiety === "clinical" ? m.anx_clinical : m.anx_none;
           return clamp(toNumber(dep, 1) * toNumber(anx, 1), 1.0, 1.6);
         }, [s]);
-
         const oncologyMultiplier = useMemo(() => {
           const m = s.multipliers;
           if (s.oncology === "cancer_noncardiotox") return m.onco_noncardio;
@@ -142,6 +165,7 @@
           return m.onco_none;
         }, [s]);
 
+        const atheroMultiplier = useMemo(() => toNumber(cacMult, 1) * toNumber(terrMult, 1), [cacMult, terrMult]);
         const compositeMultiplier = useMemo(() => toNumber(atheroMultiplier, 1) * toNumber(psychosocialMultiplier, 1) * toNumber(oncologyMultiplier, 1), [atheroMultiplier, psychosocialMultiplier, oncologyMultiplier]);
 
         const adjustedRisk = useMemo(() => {
@@ -167,66 +191,54 @@
         };
 
         const reset = () => { setS(defaultState); setBaseRiskInput(String(defaultState.baseRisk)); };
-
-        async function exportPNG() {
-          const { default: html2canvas } = await import("https://cdn.skypack.dev/html2canvas@1.4.1");
-          const el = document.getElementById("export-card"); const canvas = await html2canvas(el);
-          const url = canvas.toDataURL("image/png"); const a = document.createElement("a"); a.href = url; a.download = "riesgo-ajustado.png"; a.click();
-        }
-        async function exportPDF() {
-          const [{ jsPDF }, { default: html2canvas }] = await Promise.all([ import("https://cdn.skypack.dev/jspdf@2.5.1"), import("https://cdn.skypack.dev/html2canvas@1.4.1") ]);
-          const el = document.getElementById("export-card"); const canvas = await html2canvas(el);
-          const imgData = canvas.toDataURL("image/png"); const pdf = new jsPDF({ unit: "pt", format: "a4" });
-          const pageWidth = pdf.internal.pageSize.getWidth(); const ratio = canvas.height / canvas.width;
-          const imgWidth = pageWidth - 80; const imgHeight = imgWidth * ratio; pdf.text("Integrador de Riesgo CV", 40, 40); pdf.addImage(imgData, "PNG", 40, 60, imgWidth, imgHeight); pdf.save("riesgo-ajustado.pdf");
-        }
+        function printPDF() { window.print(); }
 
         const presets = {
-          conservador: { label: "Conservador", note: "RR moderados, prudentes.", vals: { cac_1_99: 1.4, cac_100_299: 2.0, cac_300_plus: 2.7, dep_mild: 1.10, dep_major: 1.25, anx_clinical: 1.15, onco_noncardio: 1.10, onco_cardio: 1.30 } },
-          base:        { label: "Base (actual)", note: "Valores por defecto del prototipo.", vals: {} },
-          intensivo:   { label: "Intensivo", note: "RR algo mayores para enfatizar reclasificación.", vals: { cac_1_99: 1.6, cac_100_299: 2.5, cac_300_plus: 3.5, dep_mild: 1.20, dep_major: 1.40, anx_clinical: 1.25, onco_noncardio: 1.20, onco_cardio: 1.55 } },
+          conservador: { label: "Conservador", vals: { cac_1_99: 1.4, cac_100_299: 2.0, cac_300_plus: 2.7, dep_mild: 1.10, dep_major: 1.25, anx_clinical: 1.15, onco_noncardio: 1.10, onco_cardio: 1.30, terr_1: 1.20, terr_2: 1.35, terr_3: 1.50, terr_4: 1.70 } },
+          base:        { label: "Base (actual)", vals: {} },
+          intensivo:   { label: "Intensivo", vals: { cac_1_99: 1.6, cac_100_299: 2.5, cac_300_plus: 3.5, dep_mild: 1.20, dep_major: 1.40, anx_clinical: 1.25, onco_noncardio: 1.20, onco_cardio: 1.55, terr_1: 1.30, terr_2: 1.50, terr_3: 1.70, terr_4: 1.90 } },
         };
         function applyPreset(key) { const p = presets[key]; if (!p) return; setS((old) => ({ ...old, multipliers: { ...old.multipliers, ...p.vals } })); }
 
-        function saveProfile() { const entry = { name: profileName || `Paciente ${profiles.length + 1}`, state: s }; const next = [entry, ...profiles].slice(0, 50); setProfiles(next); try { window.localStorage.setItem("cv_risk_profiles_v1", JSON.stringify(next)); } catch {} setProfileName(""); }
+        function saveProfile() { const entry = { name: profileName || `Paciente ${profiles.length + 1}`, state: s }; const next = [entry, ...profiles].slice(0, 50); setProfiles(next); try { window.localStorage.setItem("cv_risk_profiles_v2", JSON.stringify(next)); } catch {} setProfileName(""); }
         function loadProfile(idx) { const p = profiles[idx]; if (!p) return; setS(p.state); setBaseRiskInput(String(p.state?.baseRisk ?? 0)); }
-        function deleteProfile(idx) { const next = profiles.filter((_, i) => i !== idx); setProfiles(next); try { window.localStorage.setItem("cv_risk_profiles_v1", JSON.stringify(next)); } catch {} }
+        function deleteProfile(idx) { const next = profiles.filter((_, i) => i !== idx); setProfiles(next); try { window.localStorage.setItem("cv_risk_profiles_v2", JSON.stringify(next)); } catch {} }
 
         function calcWith(overrides) {
-          const st = { ...s, ...overrides }; const m = st.multipliers; let athero = 1.0;
-          if (st.atheroMode === "cac") { const key = normalizeCAC(st.cac); const map = { unknown: m.cac_unknown, "0": m.cac_0, "1_99": m.cac_1_99, "100_299": m.cac_100_299, "300_plus": m.cac_300_plus }; athero = toNumber(map[key], 1.0); }
-          else if (st.atheroMode === "carotid") { athero = st.carotidPlaque === "present" ? toNumber(m.carotid_present, 1.4) : toNumber(m.carotid_none, 1.0); }
+          const st = { ...s, psychosocial: { ...s.psychosocial }, ...overrides };
+          const m = { ...s.multipliers, ...(overrides?.multipliers || {}) };
+          let cac = 1.0;
+          switch (normalizeCAC(st.cac)) {
+            case "0": cac = m.cac_0; break;
+            case "1_99": cac = m.cac_1_99; break;
+            case "100_299": cac = m.cac_100_299; break;
+            case "300_plus": cac = m.cac_300_plus; break;
+            default: cac = m.cac_unknown; break;
+          }
+          const t = clamp(parseInt(st.territories || 0, 10) || 0, 0, 4);
+          const terr = toNumber(m[`terr_${t}`], 1.0);
+          const athero = toNumber(cac, 1.0) * toNumber(terr, 1.0);
           const dep = st.psychosocial.depression === "mild" ? m.dep_mild : st.psychosocial.depression === "major" ? m.dep_major : m.dep_none;
-          const anx = st.psychosocial.anxiety === "clinical" ? m.anx_clinical : m.anx_none; const psych = clamp(toNumber(dep, 1.0) * toNumber(anx, 1.0), 1.0, 1.6);
+          const anx = st.psychosocial.anxiety === "clinical" ? m.anx_clinical : m.anx_none;
+          const psych = clamp(toNumber(dep, 1.0) * toNumber(anx, 1.0), 1.0, 1.6);
           const onco = st.oncology === "cancer_noncardiotox" ? m.onco_noncardio : st.oncology === "anthracycline_or_rt" ? m.onco_cardio : m.onco_none;
-          const comp = toNumber(athero, 1.0) * toNumber(psych, 1.0) * toNumber(onco, 1.0); const base = clamp(Number(st.baseRisk) || 0, 0, 60); const adj = clamp(base * comp, 0, 95);
-          return { base, comp, adj };
+          const comp = toNumber(athero, 1.0) * toNumber(psych, 1.0) * toNumber(onco, 1.0);
+          const base = clamp(Number(st.baseRisk) || 0, 0, 60);
+          const adj = clamp(base * comp, 0, 95);
+          return { base, comp, adj, athero, cac, terr };
         }
 
         function runTests() {
           const baseCases = [
-            { name: "Sin modificadores", cfg: { baseRisk: 10, atheroMode: "none", psychosocial: { depression: "none", anxiety: "none" }, oncology: "none" }, expectAdj: 10.0 },
-            { name: "CAC=0 reduce riesgo", cfg: { baseRisk: 10, atheroMode: "cac", cac: "0" }, expectAdj: 7.0 },
-            { name: "CAC 100–299 eleva riesgo", cfg: { baseRisk: 10, atheroMode: "cac", cac: "100_299" }, expectAdj: 22.0 },
+            { name: "Sin modificadores", cfg: { baseRisk: 10, psychosocial: { depression: "none", anxiety: "none" }, oncology: "none", cac:"unknown", territories:0 }, expectAdj: 10.0 },
+            { name: "CAC=0 reduce", cfg: { baseRisk: 10, cac: "0", territories: 0 }, expectAdj: 7.0 },
+            { name: "CAC 100–299 eleva", cfg: { baseRisk: 10, cac: "100_299", territories: 0 }, expectAdj: 22.0 },
             { name: "Psicosocial mayor + ansiedad clínica", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" } }, expectAdj: 15.6 },
             { name: "Onco cardiotóxicos", cfg: { baseRisk: 10, oncology: "anthracycline_or_rt" }, expectAdj: 14.0 },
-            { name: "Combinado fuerte", cfg: { baseRisk: 8, atheroMode: "cac", cac: "300_plus", psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt" }, expectAdj: 43.7 },
+            { name: "Territorios = 2", cfg: { baseRisk: 10, territories: 2 }, expectAdj: 14.5 },
+            { name: "Combinado fuerte (CAC300+, Terr=3)", cfg: { baseRisk: 8, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt" }, expectAdj: 72.8 },
           ];
-          const extraCases = [
-            { name: "Carótida con placa presente", cfg: { baseRisk: 10, atheroMode: "carotid", carotidPlaque: "present" }, expectAdj: 14.0 },
-            { name: "Onco no cardiotóxicos", cfg: { baseRisk: 10, oncology: "cancer_noncardiotox" }, expectAdj: 11.5 },
-            { name: "CAC desconocido (sin efecto)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "unknown" }, expectAdj: 10.0 },
-            { name: "baseRisk como string", cfg: { baseRisk: "10", atheroMode: "cac", cac: "0" }, expectAdj: 7.0 },
-            { name: "CAC 1-99 (guion)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "1-99" }, expectAdj: 15.0 },
-            { name: "CAC 300+ (plus)", cfg: { baseRisk: 10, atheroMode: "cac", cac: "300+" }, expectAdj: 30.0 },
-            { name: "Carótida unknown (sin efecto)", cfg: { baseRisk: 10, atheroMode: "carotid", carotidPlaque: "unknown" }, expectAdj: 10.0 },
-            { name: "baseRisk vacío => 0", cfg: { baseRisk: "", atheroMode: "cac", cac: "300_plus" }, expectAdj: 0.0 },
-            { name: "Clamp psicosocial a 1.6", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" }, multipliers: { dep_major: 2.0, anx_clinical: 2.0 } }, expectAdj: 16.0 },
-            { name: "Preset conservador aplicado", cfg: { baseRisk: 10, atheroMode: "cac", cac: "1_99", multipliers: { cac_1_99: 1.4 } }, expectAdj: 14.0 },
-            { name: "Preserva 0%", cfg: { baseRisk: 0, atheroMode: "cac", cac: "300_plus" }, expectAdj: 0.0 },
-          ];
-          const all = [...baseCases, ...extraCases];
-          const results = all.map((t) => {
+          const results = baseCases.map((t) => {
             const merged = { ...defaultState, ...t.cfg };
             merged.multipliers = { ...defaultState.multipliers, ...(t.cfg.multipliers || {}) };
             const r = calcWith(merged);
@@ -240,40 +252,21 @@
           const results = [];
           const catCases = [{r:4.9,expect:"Bajo"},{r:5.0,expect:"Límite"},{r:9.9,expect:"Límite"},{r:10.0,expect:"Intermedio"},{r:19.9,expect:"Intermedio"},{r:20.0,expect:"Alto"}];
           for (const c of catCases) { const got = categorizeLabel(c.r); results.push({ name: `Categoría @ ${c.r}%`, got, expected: c.expect, pass: got === c.expect }); }
-          const bases = [0,1,5,10,30,60]; const vals = bases.map((b)=>calcWith({baseRisk:b, atheroMode:"none", psychosocial:{depression:"none",anxiety:"none"}, oncology:"none"}).adj);
+          const bases = [0,1,5,10,30,60]; const vals = bases.map((b)=>calcWith({baseRisk:b, territories:0, cac:"unknown", psychosocial:{depression:"none",anxiety:"none"}, oncology:"none"}).adj);
           let mono = true; for (let i=1;i<vals.length;i++) if (vals[i] < vals[i-1] - 1e-9) mono=false;
           results.push({ name: "Monotonicidad baseRisk", got: mono ? "no decrece" : "decreció", expected: "no decrece", pass: mono });
           const base = 10;
-          const rUnknown = calcWith({ baseRisk: base, atheroMode: "cac", cac: "unknown" }).adj;
-          const r0 = calcWith({ baseRisk: base, atheroMode: "cac", cac: "0" }).adj;
-          const r1 = calcWith({ baseRisk: base, atheroMode: "cac", cac: "1_99" }).adj;
-          const r100 = calcWith({ baseRisk: base, atheroMode: "cac", cac: "100_299" }).adj;
-          const r300 = calcWith({ baseRisk: base, atheroMode: "cac", cac: "300_plus" }).adj;
+          const neutral = { territories:0, psychosocial:{depression:"none",anxiety:"none"}, oncology:"none" };
+          const rUnknown = calcWith({ ...neutral, baseRisk: base, cac: "unknown" }).adj;
+          const r0 = calcWith({ ...neutral, baseRisk: base, cac: "0" }).adj;
+          const r1 = calcWith({ ...neutral, baseRisk: base, cac: "1_99" }).adj;
+          const r100 = calcWith({ ...neutral, baseRisk: base, cac: "100_299" }).adj;
+          const r300 = calcWith({ ...neutral, baseRisk: base, cac: "300_plus" }).adj;
           const okCAC = Math.abs(rUnknown - base) < 1e-9 && r0 < r1 && r1 < r100 && r100 < r300;
           results.push({ name: "Orden CAC", got: `${r0.toFixed(1)} < ${r1.toFixed(1)} < ${r100.toFixed(1)} < ${r300.toFixed(1)} (unknown≈${rUnknown.toFixed(1)})`, expected: "0 < 1_99 < 100_299 < 300_plus; unknown=base", pass: okCAC });
-          const inputs = ["1-99","100-299","300+","0","unknown"]; let idem = true;
-          for (const x of inputs) { const a = normalizeCAC(x); const b = normalizeCAC(a); if (a !== b) idem = false; }
-          results.push({ name: "normalizeCAC idempotente", got: idem ? "sí" : "no", expected: "sí", pass: idem });
-          const combos = [
-            { atheroMode: "cac", cac: "300_plus" },
-            { atheroMode: "carotid", carotidPlaque: "present" },
-            { psychosocial: { depression: "major", anxiety: "clinical" } },
-            { oncology: "anthracycline_or_rt" },
-            { atheroMode: "cac", cac: "0", psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "cancer_noncardiotox" },
-          ];
-          let zeroOk = true; for (const c of combos) { const r = calcWith({ baseRisk: 0, ...c }).adj; if (Math.abs(r) > 1e-9) { zeroOk = false; break; } }
-          results.push({ name: "baseRisk=0 permanece 0", got: zeroOk ? "sí" : "no", expected: "sí", pass: zeroOk });
-          let fuzzPass = true;
-          for (let i=0;i<30;i++) {
-            const b = Math.random()*60;
-            const modes = ["none","cac","carotid"]; const am = modes[Math.floor(Math.random()*modes.length)];
-            const st = { baseRisk: b, atheroMode: am, psychosocial: { depression: "none", anxiety: "none" }, oncology: "none" };
-            if (am === "cac") st.cac = ["unknown","0","1_99","100_299","300_plus"][Math.floor(Math.random()*5)];
-            if (am === "carotid") st.carotidPlaque = Math.random() < 0.5 ? "none" : "present";
-            const r = calcWith(st).adj;
-            if (!Number.isFinite(r) || r < -1e-9 || r > 95 + 1e-9) { fuzzPass = false; break; }
-          }
-          results.push({ name: "Fuzz aleatorio (30 casos)", got: fuzzPass ? "ok" : "fallas", expected: "ok", pass: fuzzPass });
+          const rT = [0,1,2,3,4].map(t=>calcWith({ baseRisk: 10, territories: t, cac:"unknown", psychosocial:{depression:"none",anxiety:"none"}, oncology:"none" }).adj);
+          let terrMono = true; for (let i=1;i<rT.length;i++) if (rT[i] < rT[i-1] - 1e-9) terrMono=false;
+          results.push({ name: "Orden territorios (0→4)", got: rT.map(v=>v.toFixed(1)).join(" < "), expected: "monótono creciente", pass: terrMono });
           setExtResults(results);
         }
 
@@ -283,28 +276,28 @@
               <div className="max-w-4xl mx-auto space-y-6">
                 <header className="flex items-center justify-between">
                   <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Integrador de Riesgo CV</h1>
-                  <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center no-print">
                     <button onClick={() => setShowBib(true)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Bibliografía</button>
+                    <button onClick={() => setShowAbout(true)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Acerca / Metodología</button>
                     <label className="flex items-center gap-2 text-sm px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 border">
                       <input type="checkbox" checked={liveUpdate} onChange={(e) => setLiveUpdate(e.target.checked)} />
                       Live update
                     </label>
                     <button onClick={() => setDark((v) => !v)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{dark ? "Claro" : "Oscuro"}</button>
                     <button onClick={() => setShowAdvanced((v) => !v)} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
-                    <button onClick={exportPNG} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PNG</button>
-                    <button onClick={exportPDF} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF</button>
-                    <button onClick={reset} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Reiniciar</button>
+                    <button onClick={printPDF} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF (imprimir)</button>
+                    <button onClick={() => { const def = { ...defaultState }; const { baseRisk, ...rest } = def; localStorage.setItem("cv_risk_integrator_state_v2", JSON.stringify(rest)); location.reload(); }} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Reiniciar</button>
                   </div>
                 </header>
 
                 <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Ingresá el <span className="font-medium">riesgo base a 10 años</span> obtenido de un score validado (SCORE2, <abbr title="Pooled Cohort Equations (ACC/AHA)">PCE</abbr>, MESA, u <em>HEARTS/OPS</em>). Luego, aplicá ajustes por
-                  <span className="font-medium"> ateromatosis subclínica</span>, <span className="font-medium">depresión/ansiedad</span> y <span className="font-medium">antecedentes oncológicos</span>.
+                  Ingresá el <span className="font-medium">riesgo base a 10 años</span> obtenido de un score validado (SCORE2, <abbr title="Pooled Cohort Equations (ACC/AHA)">PCE</abbr>, PREVENT, MESA, u <em>HEARTS/OPS</em>). Luego, aplicá ajustes por
+                  <span className="font-medium"> ateromatosis subclínica</span> (CAC y número de territorios con placa), <span className="font-medium">depresión/ansiedad</span> y <span className="font-medium">antecedentes oncológicos</span>.
                   Esta herramienta es educativa y no reemplaza el juicio clínico ni las guías.
                 </p>
 
                 <div className="grid md:grid-cols-2 gap-6">
-                  <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border" id="export-card">
+                  <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
                     <h2 className="text-lg font-semibold">1) Riesgo base</h2>
 
                     <label className="block text-sm">Fuente</label>
@@ -319,13 +312,21 @@
 
                       {s.baseSource.startsWith("HEARTS") && (
                         <>
-                          <a className="px-3 py-2 rounded-2xl border" href="https://heartsapp.paho.org" target="_blank" rel="noreferrer noopener">Abrir HEARTS</a>
+                          <a className="px-3 py-2 rounded-2xl border" href="https://www.paho.org/cardioapp/web/#/cvrisk" target="_blank" rel="noreferrer noopener">Abrir HEARTS</a>
                           <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar % (portapapeles)</button>
+                        </>
+                      )}
+
+                      {s.baseSource.startsWith("PREVENT") && (
+                        <>
+                          <a className="px-3 py-2 rounded-2xl border" href="https://professional.heart.org/en/guidelines-and-statements/prevent-risk-calculator/prevent-calculator" target="_blank" rel="noreferrer noopener">Abrir PREVENT</a>
+                          <button onClick={pastePercentFromClipboard} className="px-3 py-2 rounded-2xl border">Pegar % (portapapeles)</button>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">Usá el <strong>10 años</strong> (no el de 30 años).</span>
                         </>
                       )}
                     </div>
                     <div className="text-xs text-slate-500 dark:text-slate-400">
-                      PCE = Pooled Cohort Equations (ACC/AHA). Pegá el % que te dé la fuente elegida.
+                      PCE = Pooled Cohort Equations (ACC/AHA); PREVENT = nuevas ecuaciones AHA 2023–2024. Pegá el % que te dé la fuente elegida.
                     </div>
 
                     <label className="block text-sm mt-2">Riesgo a 10 años (%)</label>
@@ -342,14 +343,9 @@
 
                   <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
                     <h2 className="text-lg font-semibold">2) Ateromatosis subclínica</h2>
-                    <div className="flex gap-3">
-                      <button onClick={() => setS({ ...s, atheroMode: "none" })} className={`px-3 py-1 rounded-xl border ${s.atheroMode === "none" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}`}>Sin dato</button>
-                      <button onClick={() => setS({ ...s, atheroMode: "cac" })} className={`px-3 py-1 rounded-xl border ${s.atheroMode === "cac" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}`}>CAC</button>
-                      <button onClick={() => setS({ ...s, atheroMode: "carotid" })} className={`px-3 py-1 rounded-xl border ${s.atheroMode === "carotid" ? "bg-slate-900 text-white" : "bg-white dark:bg-slate-900"}`}>Ecografía carotídea</button>
-                    </div>
-                    {s.atheroMode === "cac" && (
-                      <div className="space-y-2">
-                        <label className="block text-sm">Categoría de CAC</label>
+                    <div className="grid gap-3">
+                      <div>
+                        <label className="block text-sm">CAC (categoría)</label>
                         <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.cac} onChange={(e) => setS({ ...s, cac: normalizeCAC(e.target.value) })}>
                           <option value="unknown">Desconocido</option>
                           <option value="0">0</option>
@@ -358,20 +354,23 @@
                           <option value="300_plus">≥300</option>
                         </select>
                       </div>
-                    )}
-                    {s.atheroMode === "carotid" && (
-                      <div className="space-y-2">
-                        <label className="block text-sm">Placa carotídea</label>
-                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.carotidPlaque} onChange={(e) => setS({ ...s, carotidPlaque: e.target.value })}>
-                          <option value="unknown">Desconocido</option>
-                          <option value="none">Ausente</option>
-                          <option value="present">Presente</option>
+                      <div>
+                        <label className="block text-sm">Territorios con placa (carótida, aorta abd., ilíacas, femorales)</label>
+                        <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.territories} onChange={(e) => setS({ ...s, territories: clamp(parseInt(e.target.value,10)||0,0,4) })}>
+                          <option value="0">0</option>
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                          <option value="4">4</option>
                         </select>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">El multiplicador de territorios es configurable en “Ajustes avanzados”.</div>
                       </div>
-                    )}
-                    <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador actual: <span className="font-semibold">× {toNumber(atheroMultiplier, 1).toFixed(2)}</span></div>
+                    </div>
+                    <div className="text-sm text-slate-600 dark:text-slate-300">Multiplicador ateromatosis: <span className="font-semibold">CAC × Terr = {toNumber(cacMult,1).toFixed(2)} × {toNumber(terrMult,1).toFixed(2)} = × {toNumber(atheroMultiplier,1).toFixed(2)}</span></div>
                   </section>
+                </div>
 
+                <div className="grid md:grid-cols-2 gap-6">
                   <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-4 space-y-4 border">
                     <h2 className="text-lg font-semibold">3) Psicosocial</h2>
                     <div className="grid grid-cols-2 gap-4">
@@ -405,18 +404,18 @@
                   </section>
                 </div>
 
-                <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border" id="export-card">
+                <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border print-area">
                   <h2 className="text-lg font-semibold mb-3">Resultado</h2>
                   <div className="grid md:grid-cols-3 gap-4 items-stretch">
                     <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
                       <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Riesgo base</div>
                       <div className="text-3xl font-semibold">{pretty(adjustedRisk.base)}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">Fuente: {s.baseSource || "(—)"}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">Fuente: {s.baseSource || "(—)"} | CAC: {s.cac.replace("_","-")} | Terr: {s.territories}</div>
                     </div>
                     <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
                       <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Multiplicador compuesto</div>
                       <div className="text-3xl font-semibold">× {toNumber(compositeMultiplier, 1).toFixed(2)}</div>
-                      <div className="text-xs text-slate-500 dark:text-slate-400">Atero × Psicosocial × Onco</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">Atero (CAC×Terr) × Psico × Onco</div>
                     </div>
                     <div className={`border rounded-2xl p-4 ${category.color}`}>
                       <div className="text-xs uppercase tracking-wide">Riesgo ajustado</div>
@@ -429,14 +428,14 @@
                 <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 space-y-4 border">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <h2 className="text-lg font-semibold">Ajustes avanzados (editar multiplicadores)</h2>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm no-print">
                       <span>Presets RR:</span>
                       <button onClick={() => applyPreset("conservador")} className="px-2 py-1 rounded-xl border">Conservador</button>
                       <button onClick={() => applyPreset("base")} className="px-2 py-1 rounded-xl border">Base</button>
                       <button onClick={() => applyPreset("intensivo")} className="px-2 py-1 rounded-xl border">Intensivo</button>
                     </div>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">Personalizá los RR. Los cambios persisten localmente.</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">Personalizá los RR (incluido el efecto por territorios). Los cambios persisten localmente.</p>
 
                   <div className="grid md:grid-cols-3 gap-4 text-sm">
                     {Object.entries(s.multipliers).map(([key, val]) => (
@@ -456,7 +455,7 @@
                   </div>
 
                   <div className="border rounded-2xl p-4">
-                    <div className="flex items-center gap-2 text-sm mb-2">
+                    <div className="flex items-center gap-2 text-sm mb-2 no-print">
                       <input className="border rounded-xl px-2 py-1 dark:bg-slate-900" placeholder="Nombre del perfil" value={profileName} onChange={(e) => setProfileName(e.target.value)} />
                       <button onClick={saveProfile} className="px-2 py-1 rounded-xl border">Guardar perfil</button>
                     </div>
@@ -465,7 +464,7 @@
                         {profiles.map((p, idx) => (
                           <li key={idx} className="flex items-center justify-between border rounded-2xl px-3 py-2">
                             <div className="text-sm">{p.name}</div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 no-print">
                               <button onClick={() => loadProfile(idx)} className="px-2 py-1 rounded-xl border">Cargar</button>
                               <button onClick={() => deleteProfile(idx)} className="px-2 py-1 rounded-xl border">Borrar</button>
                             </div>
@@ -477,12 +476,12 @@
                 </section>
 
                 <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between no-print">
                     <h2 className="text-lg font-semibold mb-2">Pruebas automáticas</h2>
                     <button onClick={runTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Ejecutar tests</button>
                     <button onClick={runExtendedTests} className="px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-900 hover:bg-slate-100 border">Validación extendida</button>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-300">Este bloque verifica que las operaciones matemáticas, incluyendo la normalización de CAC y la conversión numérica de <em>baseRisk</em>, funcionen correctamente.</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-300">Este bloque verifica operaciones matemáticas (incluye CAC y territorios) y aisla los tests del estado actual.</p>
                   {Array.isArray(testResults) && (
                     <ul className="mt-3 grid md:grid-cols-2 gap-2 text-sm">
                       {testResults.map((t, i) => (
@@ -514,20 +513,17 @@
                 <section className="bg-white dark:bg-slate-800 rounded-2xl shadow p-5 border">
                   <h2 className="text-lg font-semibold mb-2">Notas rápidas y referencias</h2>
                   <ul className="list-disc pl-6 space-y-1 text-sm text-slate-700 dark:text-slate-300">
-                    <li>Ingresá el valor base de un score validado (SCORE2, PCE, MESA, HEARTS/OPS). Esta app sólo aplica multiplicadores.</li>
-                    <li><span className="font-medium">CAC=0</span> suele asociarse a menor riesgo a corto/mediano plazo; categorías crecientes de CAC elevan el riesgo relativo.</li>
-                    <li>Depresión y ansiedad clínicas se asocian con incremento de riesgo CV; los valores aquí son conservadores y ajustables.</li>
-                    <li>Historia de cáncer con antraciclinas o radioterapia mediastinal eleva riesgo CV a largo plazo; considerar prevención intensiva.</li>
+                    <li>Ingresá el valor base de un score validado (SCORE2, PCE, PREVENT, MESA, HEARTS/OPS). Esta app aplica multiplicadores (CAC, territorios, psicosocial, onco).</li>
+                    <li>La evidencia apoya que <span className="font-medium">CAC alto</span> y <span className="font-medium">mayor carga/territorios de placa</span> incrementan riesgo (ver BioImage 2015; PESA y revisiones).</li>
+                    <li>Los multiplicadores por territorios son <span className="font-medium">heurísticos conservadores</span> derivados de gradientes de riesgo por carga de placa; podés afinarlos en “Ajustes avanzados”.</li>
                   </ul>
-                  <div className="mt-3 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Ejemplos de fuentes: Detrano R. <em>NEJM</em> 2008; SCORE2 <em>EHJ</em> 2021; Hippisley-Cox J. <em>BMJ</em> 2017; Yusuf S. <em>Lancet</em> 2004; Lyon AR. <em>EHJ</em> 2022.
-                  </div>
                 </section>
 
                 <footer className="text-xs text-slate-500 dark:text-slate-400 pt-2">
                   © {new Date().getFullYear()} – Uso educativo. No reemplaza guías clínicas ni juicio profesional.
                 </footer>
 
+                {/* Bibliografía */}
                 {showBib && (
                   <div className="fixed inset-0 z-50">
                     <div className="absolute inset-0 bg-black/40" onClick={() => setShowBib(false)} />
@@ -560,14 +556,40 @@
                               <div className="mt-2 flex flex-wrap gap-2 items-center">
                                 {b.doi && (<a href={`https://doi.org/${b.doi}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">DOI</a>)}
                                 <a href={`https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent((b.title || "") + " " + (b.journal || "") + " " + (b.year || ""))}`} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">PubMed</a>
-                                {b.url && !String(b.url).includes("doi.org") && (<a href={b.url} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">Fuente</a>)}
+                                {b.url && (<a href={b.url} target="_blank" rel="noreferrer noopener" className="px-2 py-1 rounded-xl border">Fuente</a>)}
                                 <button onClick={async () => { try { await navigator.clipboard.writeText(b.citation); } catch {} }} className="px-2 py-1 rounded-xl border">Copiar cita</button>
                                 {Array.isArray(b.tags) && b.tags.map(t => (<span key={t} className="text-xs px-2 py-0.5 rounded-full border bg-slate-50 dark:bg-slate-800">{t}</span>))}
                               </div>
                             </li>
                           ))}
                         </ul>
-                        <div className="mt-4 text-xs text-slate-500 dark:text-slate-400">Nota: los valores por defecto de los multiplicadores se basan en síntesis de estas fuentes y pueden ajustarse desde la sección "Ajustes avanzados".</div>
+                        <div className="mt-4 text-xs text-slate-500 dark:text-slate-400">Incluye PREVENT (AHA 2023–2024) y enlaces a calculadora y paper.</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Acerca / Metodología */}
+                {showAbout && (
+                  <div className="fixed inset-0 z-50">
+                    <div className="absolute inset-0 bg-black/40" onClick={() => setShowAbout(false)} />
+                    <div className="absolute inset-0 flex items-start justify-center p-4 md:p-10 overflow-auto">
+                      <div className="w-full max-w-3xl bg-white dark:bg-slate-900 dark:text-slate-100 rounded-2xl shadow-xl border p-4 md:p-6 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-lg font-semibold">Acerca de esta calculadora</h3>
+                          <button onClick={() => setShowAbout(false)} className="px-3 py-1 rounded-xl border">Cerrar</button>
+                        </div>
+                        <p className="text-sm leading-relaxed">
+                          Esta herramienta integra un <strong>riesgo base</strong> (p.ej., SCORE2, PCE, PREVENT, HEARTS/OPS) con multiplicadores por <strong>ateromatosis subclínica</strong> (CAC y número de territorios con placa por eco/3D-VUS), <strong>factores psicosociales</strong> (depresión/ansiedad) y <strong>antecedentes oncológicos</strong>.
+                        </p>
+                        <ol className="list-decimal pl-5 text-sm leading-relaxed space-y-1">
+                          <li><strong>Selección de literatura:</strong> CAC y carga de placa periférica muestran asociación independiente con eventos y mejoran reclasificación (BioImage 2015); PESA caracteriza <em>multiterritorialidad</em>; PREVENT provee una alternativa moderna a PCE para riesgo global CVD.</li>
+                          <li><strong>Modelo multiplicativo:</strong> <code>R_aj = R_base × M(CAC) × M(Territorios) × M(Psico) × M(Onco)</code>. Multiplicadores por defecto conservadores y editables.</li>
+                          <li><strong>Territorios:</strong> 4 lechos (carótida, aorta abdominal, ilíacas, femorales). RR iniciales (1.00, 1.25, 1.45, 1.65, 1.85) como aproximación acorde al gradiente por carga (BioImage) y a la clasificación por territorios (PESA); requieren <em>validación local</em>.</li>
+                          <li><strong>Pruebas internas:</strong> tests automatizados (monotonicidad, orden CAC, territorios) para evitar regresiones.</li>
+                          <li><strong>Limitaciones:</strong> evidencia sobre conteo de territorios y eventos a 10 años aún emergente; este módulo es <em>hipótesis operativa</em> editable por el usuario.</li>
+                        </ol>
+                        <p className="text-sm leading-relaxed">Objetivo: facilitar una <strong>validación clínica</strong> comparando reclasificación vs. PCE/SCORE2/PREVENT/HEARTS, evaluando calibración, discriminación y NRI/IDI.</p>
                       </div>
                     </div>
                   </div>
