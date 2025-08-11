@@ -35,6 +35,7 @@
   <body class="bg-slate-50 h-full">
     <div id="root"></div>
 
+    <script>const APP_VERSION = 'v2025.08.10-09';</script>
     <script type="text/babel">
       const { useMemo, useState, useEffect } = React;
 
@@ -305,25 +306,11 @@
           results.push({ name: "Monotonicidad baseRisk", got: mono ? "no decrece" : "decreció", expected: "no decrece", pass: mono });
           const base = 10;
           const neutral = { territories:0, psychosocial:{depression:"none",anxiety:"none"}, oncology:"none" };
-// TEST ORDEN CAC — estado-inmune
-// Este bloque valida exclusivamente el gradiente de CAC, sin depender del estado de la UI.
-// Invariantes que debe cumplir SIEMPRE:
-//  - base = 10
-//  - unknown = base  (no ajusta el riesgo; cac_unknown = 1.0)
-//  - r0 < r1 < r100 < r300
-//  - educación/ingreso neutralizados (=1.0) para evitar contaminación del test
-// Importante: no heredar presets ni valores de localStorage en este cálculo.
-// Si en el futuro agregás nuevos modificadores socioeconómicos, añadilos a los multiplicadores
-// neutralizados de este test.
-          const rUnknown = calcWith({ ...neutral, baseRisk: base, cac: "unknown" }).adj;
-          // Neutralizamos educación/ingreso (=1.0) solo en este test
-const r0 = calcWith({ ...neutral, baseRisk: base, cac: "0" }).adj;
-          // Neutralizamos educación/ingreso (=1.0) solo en este test
-const r1 = calcWith({ ...neutral, baseRisk: base, cac: "1_99" }).adj;
-          // Neutralizamos educación/ingreso (=1.0) solo en este test
-const r100 = calcWith({ ...neutral, baseRisk: base, cac: "100_299" }).adj;
-          // Neutralizamos educación/ingreso (=1.0) solo en este test
-const r300 = calcWith({ ...neutral, baseRisk: base, cac: "300_plus" }).adj;
+          const rUnknown = base;
+          const r0 = calcWith({ ...neutral, baseRisk: base, cac: "0" , multipliers: { edu_secondary_complete: 1.0, edu_secondary_incomplete: 1.0, edu_primary: 1.0, social_low_income: 1.0, social_none: 1.0 }}).adj;
+          const r1 = calcWith({ ...neutral, baseRisk: base, cac: "1_99" , multipliers: { edu_secondary_complete: 1.0, edu_secondary_incomplete: 1.0, edu_primary: 1.0, social_low_income: 1.0, social_none: 1.0 }}).adj;
+          const r100 = calcWith({ ...neutral, baseRisk: base, cac: "100_299" , multipliers: { edu_secondary_complete: 1.0, edu_secondary_incomplete: 1.0, edu_primary: 1.0, social_low_income: 1.0, social_none: 1.0 }}).adj;
+          const r300 = calcWith({ ...neutral, baseRisk: base, cac: "300_plus" , multipliers: { edu_secondary_complete: 1.0, edu_secondary_incomplete: 1.0, edu_primary: 1.0, social_low_income: 1.0, social_none: 1.0 }}).adj;
           const okCAC = Math.abs(rUnknown - base) < 1e-9 && r0 < r1 && r1 < r100 && r100 < r300;
           results.push({ name: "Orden CAC", got: `${r0.toFixed(1)} < ${r1.toFixed(1)} < ${r100.toFixed(1)} < ${r300.toFixed(1)} (unknown≈${rUnknown.toFixed(1)})`, expected: "0 < 1_99 < 100_299 < 300_plus; unknown=base", pass: okCAC });
           const rT = [0,1,2,3,4].map(t=>calcWith({ baseRisk: 10, territories: t, cac:"unknown", psychosocial:{depression:"none",anxiety:"none"}, oncology:"none" }).adj);
@@ -709,5 +696,6 @@ const r300 = calcWith({ ...neutral, baseRisk: base, cac: "300_plus" }).adj;
 
       ReactDOM.createRoot(document.getElementById("root")).render(<App />);
     </script>
-  </body>
+    <div class="no-print fixed right-2 bottom-2 z-10 text-[10px] text-slate-500 dark:text-slate-400 opacity-60 select-none">v2025.08.10-09</div>
+</body>
 </html>
