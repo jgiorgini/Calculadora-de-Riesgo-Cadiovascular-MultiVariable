@@ -158,7 +158,7 @@
           document.documentElement.classList.toggle("dark", !!dark);
         }, [dark]);
 
-        const [baseRiskInput, setBaseRiskInput] = useState(String(defaultState.baseRisk));
+        const [baseRiskInput, setBaseRiskInput] = useState(String(s.baseRisk));
         const [showAdvanced, setShowAdvanced] = useState(false);
         const [showBib, setShowBib] = useState(false);
         const [showAbout, setShowAbout] = useState(false);
@@ -284,7 +284,7 @@
             { name: "Territorios = 2", cfg: { baseRisk: 10, territories: 2 }, expectAdj: 14.5 },
             { name: "Contexto social bajo ingreso", cfg: { baseRisk: 10, postalCode: "1142" }, expectAdj: 12.0 },
             { name: "Educación primaria", cfg: { baseRisk: 10, education: "primary" }, expectAdj: 14.0 },
-            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 8, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete" }, expectAdj: 91.0 },
+            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete" }, expectAdj: 91.0 },
           ];
           const results = baseCases.map((t) => {
             const merged = { ...defaultState, ...t.cfg };
