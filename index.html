@@ -48,8 +48,9 @@
         baseRisk: 0,
         baseSource: "SCORE2 (ESC 2021)",
         postalCode: "",
+        education: "university",
         cac: "unknown",
-        territories: 0, // 0..4
+        territories: 0,
         psychosocial: { depression: "none", anxiety: "none" },
         oncology: "none",
         multipliers: {
@@ -60,6 +61,7 @@
           onco_none: 1.0, onco_noncardio: 1.15, onco_cardio: 1.40,
           social_none: 1.0,
           social_low_income: 1.2,
+          edu_university: 1.0, edu_secondary_complete: 1.15, edu_secondary_incomplete: 1.25, edu_primary: 1.40,
         },
       };
 
@@ -129,17 +131,21 @@
             const raw = window.localStorage?.getItem("cv_risk_integrator_state_v2");
             const parsed = raw ? JSON.parse(raw) : {};
             const safe = { ...defaultState, ...parsed };
+            // Aseguramos que los valores que se muestran en los inputs se reinicien
             safe.baseRisk = 0;
+            safe.postalCode = "";
+            safe.education = "university";
+            safe.cac = "unknown";
+            safe.territories = 0;
+            safe.psychosocial = { depression: "none", anxiety: "none" };
+            safe.oncology = "none";
             const mm = { ...defaultState.multipliers, ...(safe.multipliers || {}) };
             for (const k of Object.keys(mm)) mm[k] = toNumber(mm[k], defaultState.multipliers[k]);
             safe.multipliers = mm;
-            safe.cac = normalizeCAC(safe.cac);
-            safe.territories = clamp(parseInt(safe.territories || 0, 10) || 0, 0, 4);
             return safe;
           } catch { return defaultState; }
         });
 
-        // Dark mode: persist + aplicar clase en <html>
         const [dark, setDark] = useState(() => {
           try {
             const saved = window.localStorage.getItem("cv_risk_ui_dark");
@@ -152,8 +158,7 @@
           document.documentElement.classList.toggle("dark", !!dark);
         }, [dark]);
 
-        const [baseRiskInput, setBaseRiskInput] = useState("");
-        useEffect(() => { setBaseRiskInput(String(s.baseRisk)); }, []);
+        const [baseRiskInput, setBaseRiskInput] = useState(String(defaultState.baseRisk));
         const [showAdvanced, setShowAdvanced] = useState(false);
         const [showBib, setShowBib] = useState(false);
         const [showAbout, setShowAbout] = useState(false);
@@ -163,8 +168,7 @@
 
         const [profiles, setProfiles] = useState(() => { try { const raw = window.localStorage.getItem("cv_risk_profiles_v2"); return raw ? JSON.parse(raw) : []; } catch { return []; } });
         const [profileName, setProfileName] = useState("");
-
-        // Guardar todo menos baseRisk
+        
         useEffect(() => {
           try {
             const { baseRisk, ...rest } = s;
@@ -185,6 +189,10 @@
         const onPostalCodeChange = (val) => {
           const postalCode = String(val).trim().toUpperCase();
           setS({ ...s, postalCode });
+        };
+        
+        const onEducationChange = (val) => {
+          setS({ ...s, education: val });
         };
 
         async function pastePercentFromClipboard() {
@@ -221,13 +229,14 @@
           const psych = clamp(toNumber(dep, 1.0) * toNumber(anx, 1.0), 1.0, 1.6);
           const onco = st.oncology === "cancer_noncardiotox" ? m.onco_noncardio : st.oncology === "anthracycline_or_rt" ? m.onco_cardio : m.onco_none;
           const social = st.postalCode === "C1142" || st.postalCode === "1142" ? toNumber(m.social_low_income, 1.2) : toNumber(m.social_none, 1.0);
-          const comp = toNumber(athero, 1.0) * toNumber(psych, 1.0) * toNumber(onco, 1.0) * toNumber(social, 1.0);
+          const education = toNumber(m[`edu_${st.education}`], 1.0);
+          const comp = toNumber(athero, 1.0) * toNumber(psych, 1.0) * toNumber(onco, 1.0) * toNumber(social, 1.0) * toNumber(education, 1.0);
           const base = clamp(Number(st.baseRisk) || 0, 0, 60);
           const adj = clamp(base * comp, 0, 95);
-          return { base, comp, adj, athero, cac, terr, psych, onco, social };
+          return { base, comp, adj, athero, cac, terr, psych, onco, social, education };
         }
 
-        const { base, comp, adj, athero, cac, terr, psych, onco, social } = useMemo(() => calcWith({}), [s]);
+        const { base, comp, adj, athero, cac, terr, psych, onco, social, education } = useMemo(() => calcWith({}), [s]);
 
         const category = useMemo(() => {
           const r = adj;
@@ -244,14 +253,20 @@
           return `Reclasificado de "${baseCategory}" a "${adjLabel}"`;
         }, [adj, baseCategory]);
 
-        const reset = () => { setS(defaultState); setBaseRiskInput(String(defaultState.baseRisk)); };
+        const reset = () => { 
+          setS(defaultState); 
+          setBaseRiskInput(String(defaultState.baseRisk)); 
+          window.localStorage.removeItem("cv_risk_integrator_state_v2");
+          setProfiles([]);
+          window.localStorage.removeItem("cv_risk_profiles_v2");
+        };
 
         function printPDF() { window.print(); }
 
         const presets = {
-          conservador: { label: "Conservador", vals: { cac_1_99: 1.4, cac_100_299: 2.0, cac_300_plus: 2.7, dep_mild: 1.10, dep_major: 1.25, anx_clinical: 1.15, onco_noncardio: 1.10, onco_cardio: 1.30, terr_1: 1.20, terr_2: 1.35, terr_3: 1.50, terr_4: 1.70, social_low_income: 1.1 } },
+          conservador: { label: "Conservador", vals: { cac_1_99: 1.4, cac_100_299: 2.0, cac_300_plus: 2.7, dep_mild: 1.10, dep_major: 1.25, anx_clinical: 1.15, onco_noncardio: 1.10, onco_cardio: 1.30, terr_1: 1.20, terr_2: 1.35, terr_3: 1.50, terr_4: 1.70, social_low_income: 1.1, edu_secondary_complete: 1.1, edu_secondary_incomplete: 1.2, edu_primary: 1.3 } },
           base:        { label: "Base (actual)", vals: {} },
-          intensivo:   { label: "Intensivo", vals: { cac_1_99: 1.6, cac_100_299: 2.5, cac_300_plus: 3.5, dep_mild: 1.20, dep_major: 1.40, anx_clinical: 1.25, onco_noncardio: 1.20, onco_cardio: 1.55, terr_1: 1.30, terr_2: 1.50, terr_3: 1.70, terr_4: 1.90, social_low_income: 1.3 } },
+          intensivo:   { label: "Intensivo", vals: { cac_1_99: 1.6, cac_100_299: 2.5, cac_300_plus: 3.5, dep_mild: 1.20, dep_major: 1.40, anx_clinical: 1.25, onco_noncardio: 1.20, onco_cardio: 1.55, terr_1: 1.30, terr_2: 1.50, terr_3: 1.70, terr_4: 1.90, social_low_income: 1.3, edu_secondary_complete: 1.2, edu_secondary_incomplete: 1.3, edu_primary: 1.5 } },
         };
         function applyPreset(key) { const p = presets[key]; if (!p) return; setS((old) => ({ ...old, multipliers: { ...old.multipliers, ...p.vals } })); }
 
@@ -261,14 +276,15 @@
 
         function runTests() {
           const baseCases = [
-            { name: "Sin modificadores", cfg: { baseRisk: 10, psychosocial: { depression: "none", anxiety: "none" }, oncology: "none", cac:"unknown", territories:0, postalCode: "" }, expectAdj: 10.0 },
+            { name: "Sin modificadores", cfg: { baseRisk: 10, psychosocial: { depression: "none", anxiety: "none" }, oncology: "none", cac:"unknown", territories:0, postalCode: "", education: "university" }, expectAdj: 10.0 },
             { name: "CAC=0 reduce", cfg: { baseRisk: 10, cac: "0", territories: 0 }, expectAdj: 7.0 },
             { name: "CAC 100–299 eleva", cfg: { baseRisk: 10, cac: "100_299", territories: 0 }, expectAdj: 22.0 },
             { name: "Psicosocial mayor + ansiedad clínica", cfg: { baseRisk: 10, psychosocial: { depression: "major", anxiety: "clinical" } }, expectAdj: 15.6 },
             { name: "Onco cardiotóxicos", cfg: { baseRisk: 10, oncology: "anthracycline_or_rt" }, expectAdj: 14.0 },
             { name: "Territorios = 2", cfg: { baseRisk: 10, territories: 2 }, expectAdj: 14.5 },
             { name: "Contexto social bajo ingreso", cfg: { baseRisk: 10, postalCode: "1142" }, expectAdj: 12.0 },
-            { name: "Combinado fuerte (CAC300+, Terr=3, onco)", cfg: { baseRisk: 8, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt" }, expectAdj: 72.8 },
+            { name: "Educación primaria", cfg: { baseRisk: 10, education: "primary" }, expectAdj: 14.0 },
+            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 8, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "none" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete" }, expectAdj: 91.0 },
           ];
           const results = baseCases.map((t) => {
             const merged = { ...defaultState, ...t.cfg };
@@ -319,6 +335,7 @@
                   <button title="Editar multiplicadores (CAC, territorios, psicosocial, onco)" onClick={() => setShowAdvanced((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{showAdvanced ? "Ocultar" : "Avanzado"}</button>
                   <button onClick={() => setDark((v) => !v)} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">{dark ? "Claro" : "Oscuro"}</button>
                   <button onClick={printPDF} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">PDF</button>
+                  <button onClick={reset} className="btn px-3 py-2 rounded-2xl shadow bg-white dark:bg-slate-800 hover:bg-slate-100 border">Reiniciar</button>
                 </div>
               </header>
 
@@ -372,6 +389,19 @@
                         value={s.postalCode}
                         onChange={(e) => onPostalCodeChange(e.target.value)}
                       />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm">
+                        Nivel de escolaridad
+                      </label>
+                      <select className="w-full border rounded-xl px-3 py-2 dark:bg-slate-900" value={s.education} onChange={(e) => onEducationChange(e.target.value)}>
+                        <option value="university">Universitario/Terciario (completo)</option>
+                        <option value="secondary_complete">Secundario (completo) o Terciario (incompleto)</option>
+                        <option value="secondary_incomplete">Secundario (incompleto)</option>
+                        <option value="primary">Primario (completo o incompleto) o sin escolaridad</option>
+                      </select>
                     </div>
                   </div>
                 </section>
@@ -459,7 +489,7 @@
                   <div className="border rounded-2xl p-4 bg-slate-50 dark:bg-slate-900">
                     <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Multiplicador compuesto</div>
                     <div className="text-3xl font-semibold">× {toNumber(comp, 1).toFixed(2)}</div>
-                    <div className="text-xs text-slate-500 dark:text-slate-400">Atero × Psico × Onco × Social</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Atero × Psico × Onco × Social × Educación</div>
                   </div>
                   <div className={`border rounded-2xl p-4 ${category.color}`}>
                     <div className="text-xs uppercase tracking-wide">Riesgo ajustado</div>
@@ -648,7 +678,7 @@
                         Esta herramienta integra un <strong>riesgo base</strong> (p.ej., SCORE2, PCE, PREVENT, HEARTS/OPS) con multiplicadores por <strong>ateromatosis subclínica</strong> (CAC y número de territorios con placa), <strong>factores psicosociales</strong> (depresión/ansiedad) y <strong>antecedentes oncológicos</strong>.
                       </p>
                       <ol className="list-decimal pl-5 text-sm leading-relaxed space-y-1">
-                        <li><strong>Modelo multiplicativo:</strong> <code>R_aj = R_base × M(CAC) × M(Territorios) × M(Psico) × M(Onco) × M(Social)</code>. Multiplicadores por defecto conservadores y editables.</li>
+                        <li><strong>Modelo multiplicativo:</strong> <code>R_aj = R_base × M(CAC) × M(Territorios) × M(Psico) × M(Onco) × M(Social) × M(Educación)</code>. Multiplicadores por defecto conservadores y editables.</li>
                         <li><strong>Territorios:</strong> 4 lechos (carótida, aorta abdominal, ilíacas, femorales). Los multiplicadores son una aproximación basada en gradientes de riesgo y la clasificación por territorios (PESA), y pueden ser ajustados por el usuario en "Avanzado".</li>
                         <li><strong>Contexto social:</strong> El código postal se usa como proxy de los determinantes sociales de la salud (acceso a servicios, calidad de vida). Este factor es experimental y busca contextualizar mejor el riesgo. Actualmente, solo se ajusta para códigos postales específicos de zonas con determinantes sociales más adversos (ej. C1142 - Villa 31 en Buenos Aires).</li>
                         <li><strong>Validación:</strong> La aplicación incluye tests internos para garantizar que la lógica de cálculo se mantenga consistente. El objetivo final es ser una herramienta de validación clínica que ayude a comparar la reclasificación de riesgo.</li>
