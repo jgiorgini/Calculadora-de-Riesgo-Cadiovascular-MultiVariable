@@ -284,14 +284,13 @@
             { name: "Territorios = 2", cfg: { baseRisk: 10, territories: 2 }, expectAdj: 14.5 },
             { name: "Contexto social bajo ingreso", cfg: { baseRisk: 10, postalCode: "1142" }, expectAdj: 12.0 },
             { name: "Educación primaria", cfg: { baseRisk: 10, education: "primary" }, expectAdj: 14.0 },
-            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete" }, expectAdj: 91.0 , tol: 0.25},
+            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete" }, expectAdj: 90.82 },
           ];
           const results = baseCases.map((t) => {
             const merged = { ...defaultState, ...t.cfg };
             merged.multipliers = { ...defaultState.multipliers, ...(t.cfg.multipliers || {}) };
             const r = calcWith(merged);
-            const tol = (typeof t.tol === "number" ? t.tol : 0.11);
-            const pass = Math.abs(r.adj - t.expectAdj) <= tol;
+            const pass = Math.abs(r.adj - t.expectAdj) < 0.11;
             return { name: t.name, got: r.adj, expected: t.expectAdj, pass };
           });
           setTestResults(results);
