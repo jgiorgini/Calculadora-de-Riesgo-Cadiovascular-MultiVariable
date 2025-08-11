@@ -284,7 +284,7 @@
             { name: "Territorios = 2", cfg: { baseRisk: 10, territories: 2 }, expectAdj: 14.5 },
             { name: "Contexto social bajo ingreso", cfg: { baseRisk: 10, postalCode: "1142" }, expectAdj: 12.0 },
             { name: "Educación primaria", cfg: { baseRisk: 10, education: "primary" }, expectAdj: 14.0 },
-            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete", multipliers: { cac_300_plus: 2.70046, terr_3: 1.50046, dep_major: 1.25046, anx_clinical: 1.15046, onco_cardio: 1.30046, edu_secondary_incomplete: 1.20046 }}}, expectAdj: 91.00 },
+            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete", multipliers: { cac_300_plus: 2.70046, terr_3: 1.50046, dep_major: 1.25046, anx_clinical: 1.15046, onco_cardio: 1.30046, edu_secondary_incomplete: 1.20046 }}, expectAdj: 91.00 },
           ];
           const results = baseCases.map((t) => {
             const merged = { ...defaultState, ...t.cfg };
