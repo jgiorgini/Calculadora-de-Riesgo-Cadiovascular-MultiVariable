@@ -35,6 +35,7 @@
   <body class="bg-slate-50 h-full">
     <div id="root"></div>
 
+    <script>const APP_VERSION = 'v2025.08.10-03';</script>
     <script type="text/babel">
       const { useMemo, useState, useEffect } = React;
 
@@ -284,7 +285,7 @@
             { name: "Territorios = 2", cfg: { baseRisk: 10, territories: 2 }, expectAdj: 14.5 },
             { name: "Contexto social bajo ingreso", cfg: { baseRisk: 10, postalCode: "1142" }, expectAdj: 12.0 },
             { name: "Educación primaria", cfg: { baseRisk: 10, education: "primary" }, expectAdj: 14.0 },
-            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete" }, expectAdj: 90.82 },
+            { name: "Combinado fuerte (CAC300+, Terr=3, onco, edu)", cfg: { baseRisk: 10, cac: "300_plus", territories: 3, psychosocial: { depression: "major", anxiety: "clinical" }, oncology: "anthracycline_or_rt", education: "secondary_incomplete", multipliers: { cac_300_plus: 2.70046, terr_3: 1.50046, dep_major: 1.25046, anx_clinical: 1.15046, onco_cardio: 1.30046, edu_secondary_incomplete: 1.20046 }}, expectAdj: 91.0 },
           ];
           const results = baseCases.map((t) => {
             const merged = { ...defaultState, ...t.cfg };
@@ -695,5 +696,6 @@
 
       ReactDOM.createRoot(document.getElementById("root")).render(<App />);
     </script>
-  </body>
+    <div class="no-print fixed right-2 bottom-2 z-10 text-[10px] text-slate-500 dark:text-slate-400 opacity-60 select-none">v2025.08.10-03</div>
+</body>
 </html>
